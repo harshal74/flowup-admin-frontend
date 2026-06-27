@@ -2,9 +2,14 @@ import { io, Socket } from "socket.io-client";
 
 export const RESTAURANT_ID = "FLOWUP001";
 
-const SOCKET_URL = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace("/api", "")
-  : "http://localhost:5000";
+// In production: set VITE_SOCKET_URL to your Railway backend root URL
+// e.g.  https://your-backend.up.railway.app
+// In development: defaults to localhost:5000
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  (import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "")
+    : "http://localhost:5000");
 
 const socket: Socket = io(SOCKET_URL, {
   autoConnect: false,
@@ -14,18 +19,12 @@ const socket: Socket = io(SOCKET_URL, {
   query: { restaurantId: RESTAURANT_ID },
 });
 
-/** Connect the socket (idempotent — safe to call multiple times) */
 export function connectSocket(): void {
-  if (!socket.connected) {
-    socket.connect();
-  }
+  if (!socket.connected) socket.connect();
 }
 
-/** Disconnect the socket */
 export function disconnectSocket(): void {
-  if (socket.connected) {
-    socket.disconnect();
-  }
+  if (socket.connected) socket.disconnect();
 }
 
 export default socket;
