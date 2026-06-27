@@ -1,7 +1,8 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://localhost:5000/api",
+  // Falls back to Render URL if VITE_API_URL is not set
+  baseURL: import.meta.env.VITE_API_URL || "https://flowup-backend-1.onrender.com/api",
 });
 
 API.interceptors.request.use((config) => {
