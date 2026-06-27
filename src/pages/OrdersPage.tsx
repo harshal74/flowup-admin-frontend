@@ -142,8 +142,17 @@ export function OrdersPage() {
   };
 
   const filteredOrders = orders.filter((o) => {
-    const q = searchQuery.toLowerCase();
-    const matchSearch = o.orderNumber.toLowerCase().includes(q) || (o.customerId?.name?.toLowerCase() || '').includes(q);
+    const q = searchQuery.toLowerCase().trim();
+    const matchSearch = !q ||
+      o.orderNumber.toLowerCase().includes(q) ||
+      (o.customerId?.name?.toLowerCase() || '').includes(q) ||
+      (o.customerId?.mobile || '').includes(q) ||
+      // Table number: match "3", "T3", "T-3", "table 3" etc.
+      (o.tableNumber != null && (
+        String(o.tableNumber).includes(q) ||
+        `t${o.tableNumber}`.includes(q.replace(/[\s-]/g, '')) ||
+        `table${o.tableNumber}`.includes(q.replace(/[\s-]/g, ''))
+      ));
     const matchStatus = !filterStatus || o.status === filterStatus;
     const matchType   = !filterType   || o.orderType === filterType;
     return matchSearch && matchStatus && matchType;
@@ -335,7 +344,7 @@ export function OrdersPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by order # or customer…"
+            placeholder="Search by order #, customer or table…"
             className="input pl-10 py-2 text-sm"
           />
         </div>
