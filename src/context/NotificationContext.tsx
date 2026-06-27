@@ -52,8 +52,35 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   const audioCtxRef      = useRef<AudioContext | null>(null);
   const audioIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const soundRef         = useRef(true); // stays in sync with soundEnabled, usable in closures
-  const waiterLoadedRef  = useRef(false); // guard: load waiter requests only once
+  const soundRef         = useRef(true);
+  const waiterLoadedRef  = useRef(false);
+
+  // ── Unlock AudioContext on first user gesture ─────────────────
+  // Browsers won't play any audio until there's been a click/keydown.
+  // We create the context on first interaction so it's ready when
+  // a socket event fires later.
+  useEffect(() => {
+    const unlock = () => {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = createAudioCtx();
+      }
+      if (audioCtxRef.current.state === "suspended") {
+        audioCtxRef.current.resume().catch(() => {});
+      }
+      // Remove after first interaction — it's unlocked for the session
+      window.removeEventListener("click",   unlock);
+      window.removeEventListener("keydown", unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+    window.addEventListener("click",      unlock, { once: true });
+    window.addEventListener("keydown",    unlock, { once: true });
+    window.addEventListener("touchstart", unlock, { once: true });
+    return () => {
+      window.removeEventListener("click",      unlock);
+      window.removeEventListener("keydown",    unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+  }, []);
 
   // Derive unreadCount directly — no separate state to get out of sync
   const unreadCount = pendingOrders.length + waiterRequests.length;
@@ -63,10 +90,15 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     try {
       if (!audioCtxRef.current) audioCtxRef.current = createAudioCtx();
       const ctx = audioCtxRef.current;
-      const osc = ctx.createOscillator(); const g = ctx.createGain();
-      osc.connect(g); g.connect(ctx.destination);
-      osc.frequency.value = 1000; g.gain.value = 0.2;
-      osc.start(); osc.stop(ctx.currentTime + 0.3);
+      // Resume if suspended (happens when no user gesture has occurred yet)
+      const play = () => {
+        const osc = ctx.createOscillator(); const g = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.frequency.value = 1000; g.gain.value = 0.2;
+        osc.start(); osc.stop(ctx.currentTime + 0.3);
+      };
+      if (ctx.state === "suspended") ctx.resume().then(play).catch(() => {});
+      else play();
     } catch { /* ignore */ }
   }, []);
 
@@ -74,13 +106,17 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     try {
       if (!audioCtxRef.current) audioCtxRef.current = createAudioCtx();
       const ctx = audioCtxRef.current;
-      [880, 1100].forEach((freq, i) => {
-        const osc = ctx.createOscillator(); const g = ctx.createGain();
-        osc.connect(g); g.connect(ctx.destination);
-        osc.frequency.value = freq; g.gain.value = 0.15;
-        osc.start(ctx.currentTime + i * 0.18);
-        osc.stop(ctx.currentTime  + i * 0.18 + 0.25);
-      });
+      const play = () => {
+        [880, 1100].forEach((freq, i) => {
+          const osc = ctx.createOscillator(); const g = ctx.createGain();
+          osc.connect(g); g.connect(ctx.destination);
+          osc.frequency.value = freq; g.gain.value = 0.15;
+          osc.start(ctx.currentTime + i * 0.18);
+          osc.stop(ctx.currentTime  + i * 0.18 + 0.25);
+        });
+      };
+      if (ctx.state === "suspended") ctx.resume().then(play).catch(() => {});
+      else play();
     } catch { /* ignore */ }
   }, []);
 
