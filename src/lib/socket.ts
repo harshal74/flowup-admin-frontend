@@ -1,14 +1,13 @@
 import { io, Socket } from "socket.io-client";
 
-export const RESTAURANT_ID = "FLOWUP001";
+// Read from env — change only .env to switch environments
+export const RESTAURANT_ID =
+  (import.meta.env.VITE_RESTAURANT_ID as string) || "FLOWUP001";
 
-// In production: set VITE_SOCKET_URL to your Railway backend root URL
-// e.g.  https://your-backend.up.railway.app
-// In development: defaults to localhost:5000
 const SOCKET_URL =
   import.meta.env.VITE_SOCKET_URL ||
   (import.meta.env.VITE_API_URL
-    ? import.meta.env.VITE_API_URL.replace(/\/api\/?$/, "")
+    ? (import.meta.env.VITE_API_URL as string).replace(/\/api\/?$/, "")
     : "http://localhost:5000");
 
 const socket: Socket = io(SOCKET_URL, {

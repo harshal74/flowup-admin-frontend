@@ -5,7 +5,7 @@ import {
   X, Image, GripVertical,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import API from '../lib/api';
+import API, { RESTAURANT_ID } from '../lib/api';
 import type { Category } from '../types';
 
 export function CategoriesPage() {
@@ -105,7 +105,7 @@ export function CategoriesPage() {
         await API.put(`/categories/${editingCategory._id}`, formData);
         toast.success('Category updated');
       } else {
-        await API.post('/categories', { ...formData, restaurantId: 'FLOWUP001' });
+        await API.post('/categories', { ...formData, restaurantId: RESTAURANT_ID });
         toast.success('Category created');
       }
       setShowModal(false);
