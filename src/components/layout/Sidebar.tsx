@@ -12,6 +12,7 @@ import {
   X,
   ChefHat,
   Bell,
+  Receipt,
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -24,36 +25,13 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  {
-    path: '/dashboard',
-    label: 'Dashboard',
-    icon: LayoutDashboard,
-  },
-  {
-    path: '/orders',
-    label: 'Orders',
-    icon: ShoppingBag,
-  },
-  {
-    path: '/categories',
-    label: 'Categories',
-    icon: FolderTree,
-  },
-  {
-    path: '/menu',
-    label: 'Menu',
-    icon: UtensilsCrossed,
-  },
-  {
-    path: '/customers',
-    label: 'Customers',
-    icon: Users,
-  },
-  {
-    path: '/settings',
-    label: 'Settings',
-    icon: Settings,
-  },
+  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { path: '/orders',    label: 'Orders',    icon: ShoppingBag    },
+  { path: '/categories',label: 'Categories',icon: FolderTree     },
+  { path: '/menu',      label: 'Menu',      icon: UtensilsCrossed},
+  { path: '/customers', label: 'Customers', icon: Users          },
+  { path: '/billing',   label: 'Billing',   icon: Receipt        },
+  { path: '/settings',  label: 'Settings',  icon: Settings       },
 ];
 
 

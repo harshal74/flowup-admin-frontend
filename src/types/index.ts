@@ -23,6 +23,7 @@ export interface Restaurant {
   closingTime: string;
 
   currency: string;
+  upiId?: string;
 
   createdAt?: string;
   updatedAt?: string;

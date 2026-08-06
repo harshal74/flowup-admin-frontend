@@ -14,6 +14,7 @@ import { MenuPage } from './pages/MenuPage';
 import { OrdersPage } from './pages/OrdersPage';
 import { CustomersPage } from './pages/CustomersPage';
 import { SettingsPage } from './pages/SettingsPage';
+import BillingPage from './pages/BillingPage';
 
 function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -43,6 +44,7 @@ function AppRoutes() {
         <Route path="/categories" element={<CategoriesPage />} />
         <Route path="/menu" element={<MenuPage />} />
         <Route path="/customers" element={<CustomersPage />} />
+        <Route path="/billing" element={<BillingPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Route>

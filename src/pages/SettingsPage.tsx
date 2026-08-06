@@ -25,30 +25,34 @@ export function SettingsPage() {
     openingTime: '09:00',
     closingTime: '23:00',
     currency: 'INR',
+    upiId: '',
   });
+
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (restaurant) {
       setFormData({
-        restaurantName:        restaurant.restaurantName        || '',
-        restaurantDescription: restaurant.restaurantDescription || '',
-        restaurantLogo:        restaurant.restaurantLogo        || '',
-        whatsappNumber:        restaurant.whatsappNumber        || '',
-        contactNumber:         restaurant.contactNumber         || '',
-        email:                 restaurant.email                 || '',
-        address:               restaurant.address               || '',
-        deliveryCharge:        restaurant.deliveryCharge        ?? 0,
-        minimumOrderAmount:    restaurant.minimumOrderAmount    ?? 0,
+        restaurantName:         restaurant.restaurantName         || '',
+        restaurantDescription:  restaurant.restaurantDescription  || '',
+        restaurantLogo:         restaurant.restaurantLogo         || '',
+        whatsappNumber:         restaurant.whatsappNumber         || '',
+        contactNumber:          restaurant.contactNumber          || '',
+        email:                  restaurant.email                  || '',
+        address:                restaurant.address                || '',
+        deliveryCharge:         restaurant.deliveryCharge         ?? 0,
+        minimumOrderAmount:     restaurant.minimumOrderAmount     ?? 0,
         averagePreparationTime: restaurant.averagePreparationTime ?? 20,
-        openingTime:           restaurant.openingTime           || '09:00',
-        closingTime:           restaurant.closingTime           || '23:00',
-        currency:              restaurant.currency              || 'INR',
+        openingTime:            restaurant.openingTime            || '09:00',
+        closingTime:            restaurant.closingTime            || '23:00',
+        currency:               restaurant.currency               || 'INR',
+        upiId:                  restaurant.upiId                  || '',
       });
     }
   }, [restaurant]);
 
-  const set = (key: string, value: any) => setFormData((prev) => ({ ...prev, [key]: value }));
+  const set = (key: string, value: any) =>
+    setFormData((prev) => ({ ...prev, [key]: value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,10 +173,11 @@ export function SettingsPage() {
       </motion.div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* ── Restaurant Info ── */}
+        {/* ── Restaurant Information ── */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="card p-6">
           <h2 className="text-lg font-semibold text-secondary-900 dark:text-white mb-6">Restaurant Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
             <div>
               <label className="label">Restaurant Name *</label>
               <div className="relative">
@@ -236,6 +241,7 @@ export function SettingsPage() {
                 <input type="text" value={formData.address} onChange={(e) => set('address', e.target.value)} className="input pl-12" placeholder="123 Food Street, City, State" />
               </div>
             </div>
+
           </div>
         </motion.div>
 
@@ -243,6 +249,7 @@ export function SettingsPage() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="card p-6">
           <h2 className="text-lg font-semibold text-secondary-900 dark:text-white mb-6">Operational Settings</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
             <div>
               <label className="label">Opening Time</label>
               <div className="relative">
@@ -297,6 +304,21 @@ export function SettingsPage() {
                 />
               </div>
             </div>
+
+            <div>
+              <label className="label">UPI ID (for QR payments)</label>
+              <div className="relative">
+                <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-secondary-400" />
+                <input
+                  type="text"
+                  value={formData.upiId}
+                  onChange={(e) => set('upiId', e.target.value)}
+                  className="input pl-12" placeholder="yourname@upi"
+                />
+              </div>
+              <p className="text-xs text-secondary-400 mt-1">Used to generate UPI QR codes on bills</p>
+            </div>
+
           </div>
         </motion.div>
 
