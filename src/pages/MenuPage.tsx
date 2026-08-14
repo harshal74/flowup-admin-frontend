@@ -174,7 +174,25 @@ export function MenuPage() {
   };
 
   const resetForm = () => { setFormData({ name: '', description: '', image: '', price: '', discountedPrice: '', categoryId: '', isVeg: true, isAvailable: true, isRecommended: false }); setEditingItem(null); };
-  const openEditModal = (item: MenuItem) => { setEditingItem(item); setFormData({ name: item.name, description: item.description || '', image: item.image || '', price: item.price.toString(), discountedPrice: item.discountedPrice?.toString() || '', categoryId: item.categoryId || '', isVeg: item.isVeg, isAvailable: item.isAvailable, isRecommended: item.isRecommended }); setShowModal(true); };
+  const openEditModal = (item: MenuItem) => {
+    setEditingItem(item);
+    // categoryId may be a populated object { _id, name } — extract the raw ID
+    const catId = item.categoryId
+      ? (typeof item.categoryId === 'object' ? (item.categoryId as any)._id : item.categoryId)
+      : '';
+    setFormData({
+      name:             item.name,
+      description:      item.description || '',
+      image:            item.image || '',
+      price:            item.price.toString(),
+      discountedPrice:  item.discountedPrice?.toString() || '',
+      categoryId:       catId,
+      isVeg:            item.isVeg,
+      isAvailable:      item.isAvailable,
+      isRecommended:    item.isRecommended,
+    });
+    setShowModal(true);
+  };
 
   const filteredItems = menuItems.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || (item.description?.toLowerCase() || '').includes(searchQuery.toLowerCase());
