@@ -200,9 +200,9 @@ export default function TablesPage() {
 
       {/* Table grid */}
       {loading ? (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
           {[...Array(totalTables || 12)].map((_, i) => (
-            <div key={i} className="skeleton h-24 rounded-2xl" />
+            <div key={i} className="skeleton h-28 rounded-2xl" />
           ))}
         </div>
       ) : tables.length === 0 ? (
@@ -216,22 +216,22 @@ export default function TablesPage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-3"
+          className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3"
         >
           {tables.map(table => {
             const style = STATUS_STYLE[table.status];
             return (
               <div
                 key={table.number}
-                className={`card p-3 flex flex-col items-center justify-center gap-1.5
+                className={`card p-4 flex flex-col items-center justify-center gap-2
                             aspect-square ${style.bg} border ${style.border}
                             transition-all hover:scale-105`}
               >
-                <Table2 className={`w-4 h-4 ${style.text} opacity-60`} />
-                <p className="text-xl font-black text-secondary-900 dark:text-white leading-none">
+                <Table2 className={`w-5 h-5 ${style.text} opacity-60`} />
+                <p className="text-2xl font-black text-secondary-900 dark:text-white leading-none">
                   {table.number}
                 </p>
-                <p className={`text-[9px] font-semibold text-center ${style.text} leading-tight`}>
+                <p className={`text-[10px] font-semibold text-center ${style.text} leading-tight`}>
                   {style.label}
                 </p>
               </div>
