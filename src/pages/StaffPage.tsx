@@ -98,7 +98,12 @@ export default function StaffPage() {
   const [saving,   setSaving]   = useState(false);
   const [blocking, setBlocking] = useState(false);
 
-  // Activity
+  // Add-staff OTP step
+  const [addStep,     setAddStep]     = useState<'form' | 'otp'>('form');
+  const [pendingStaffId, setPendingStaffId] = useState<string>('');
+  const [pendingEmail,   setPendingEmail]   = useState<string>('');
+  const [otp,            setOtp]            = useState('');
+  const [resending,      setResending]      = useState(false);
   const [activities,      setActivities]      = useState<ActivityEntry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityDays,    setActivityDays]    = useState(7);
@@ -144,7 +149,7 @@ export default function StaffPage() {
     if (showActivity && selected) fetchActivity(selected._id);
   }, [showActivity, selected, activityDays, fetchActivity]);
 
-  // ── Add staff ─────────────────────────────────────────────────
+  // ── Add staff — Step 1: create account + send OTP ────────────
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (addForm.password !== addForm.confirmPassword) {
@@ -153,22 +158,73 @@ export default function StaffPage() {
     }
     setSaving(true);
     try {
-      await API.post('/admin/staff', {
+      const res = await API.post('/admin/staff', {
         name:     addForm.name.trim(),
         email:    addForm.email.trim(),
         mobile:   addForm.mobile.trim(),
         role:     addForm.role,
         password: addForm.password,
       });
-      toast.success('Staff member created');
-      setShowAddModal(false);
-      setAddForm({ name:'', email:'', mobile:'', role:'WAITER', password:'', confirmPassword:'' });
-      fetchStaff();
+      setPendingStaffId(res.data.staffId);
+      setPendingEmail(res.data.email || addForm.email.trim());
+      setOtp('');
+
+      if (res.data.devNote) {
+        toast('SMTP not configured — check backend terminal for OTP', { icon: '🖥️', duration: 8000 });
+      } else if (res.data.emailError) {
+        toast('OTP email failed — check backend terminal', { icon: '⚠️', duration: 8000 });
+      } else {
+        toast.success('Account created! OTP sent to staff email.');
+      }
+      setAddStep('otp');
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to create staff');
     } finally {
       setSaving(false);
     }
+  };
+
+  // ── Add staff — Step 2: verify OTP ────────────────────────────
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = otp.replace(/\s/g, '');
+    if (!/^\d{6}$/.test(trimmed)) {
+      toast.error('Please enter the 6-digit OTP');
+      return;
+    }
+    setSaving(true);
+    try {
+      await API.post(`/admin/staff/${pendingStaffId}/verify-otp`, { otp: trimmed });
+      toast.success('Email verified! Staff account is now active.');
+      closeAddModal();
+      fetchStaff();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Invalid OTP');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resending) return;
+    setResending(true);
+    try {
+      await API.post(`/admin/staff/${pendingStaffId}/resend-otp`);
+      toast.success('New OTP sent!');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to resend OTP');
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const closeAddModal = () => {
+    setShowAddModal(false);
+    setAddStep('form');
+    setOtp('');
+    setPendingStaffId('');
+    setPendingEmail('');
+    setAddForm({ name:'', email:'', mobile:'', role:'WAITER', password:'', confirmPassword:'' });
   };
 
   // ── Edit staff ────────────────────────────────────────────────
@@ -433,39 +489,92 @@ export default function StaffPage() {
       )}
 
       {/* ══════════════════════════════════════════════════════════
-          ADD STAFF MODAL
+          ADD STAFF MODAL  (2-step: form → OTP)
       ══════════════════════════════════════════════════════════ */}
       <AnimatePresence>
         {showAddModal && (
-          <Modal onClose={() => setShowAddModal(false)} title="Add Staff Member">
-            <form onSubmit={handleAdd} className="space-y-4">
-              <Field label="Full Name *">
-                <input className="input" value={addForm.name} onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g., Rahul Sharma" required />
-              </Field>
-              <Field label="Email *">
-                <input className="input" type="email" value={addForm.email} onChange={e => setAddForm(p => ({ ...p, email: e.target.value }))} placeholder="staff@example.com" required />
-              </Field>
-              <Field label="Mobile">
-                <input className="input" type="tel" value={addForm.mobile} onChange={e => setAddForm(p => ({ ...p, mobile: e.target.value }))} placeholder="+91 9876543210" />
-              </Field>
-              <Field label="Role *">
-                <select className="input" value={addForm.role} onChange={e => setAddForm(p => ({ ...p, role: e.target.value as StaffRole }))} required>
-                  {ROLES.map(r => <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>)}
-                </select>
-              </Field>
-              <Field label="Password *">
-                <input className="input" type="password" value={addForm.password} onChange={e => setAddForm(p => ({ ...p, password: e.target.value }))} placeholder="Min. 6 characters" required />
-              </Field>
-              <Field label="Confirm Password *">
-                <input className="input" type="password" value={addForm.confirmPassword} onChange={e => setAddForm(p => ({ ...p, confirmPassword: e.target.value }))} placeholder="Repeat password" required />
-              </Field>
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowAddModal(false)} className="btn btn-secondary flex-1">Cancel</button>
-                <button type="submit" disabled={saving} className="btn btn-primary flex-1">
-                  {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating…</> : 'Create Staff'}
-                </button>
-              </div>
-            </form>
+          <Modal
+            onClose={closeAddModal}
+            title={addStep === 'form' ? 'Add Staff Member' : 'Verify Email'}
+          >
+            {addStep === 'form' ? (
+              <form onSubmit={handleAdd} className="space-y-4">
+                <Field label="Full Name *">
+                  <input className="input" value={addForm.name} onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g., Rahul Sharma" required />
+                </Field>
+                <Field label="Email *">
+                  <input className="input" type="email" value={addForm.email} onChange={e => setAddForm(p => ({ ...p, email: e.target.value }))} placeholder="staff@example.com" required />
+                </Field>
+                <Field label="Mobile">
+                  <input className="input" type="tel" value={addForm.mobile} onChange={e => setAddForm(p => ({ ...p, mobile: e.target.value }))} placeholder="+91 9876543210" />
+                </Field>
+                <Field label="Role *">
+                  <select className="input" value={addForm.role} onChange={e => setAddForm(p => ({ ...p, role: e.target.value as StaffRole }))} required>
+                    {ROLES.map(r => <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Password *">
+                  <input className="input" type="password" value={addForm.password} onChange={e => setAddForm(p => ({ ...p, password: e.target.value }))} placeholder="Min. 6 characters" required />
+                </Field>
+                <Field label="Confirm Password *">
+                  <input className="input" type="password" value={addForm.confirmPassword} onChange={e => setAddForm(p => ({ ...p, confirmPassword: e.target.value }))} placeholder="Repeat password" required />
+                </Field>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={closeAddModal} className="btn btn-secondary flex-1">Cancel</button>
+                  <button type="submit" disabled={saving} className="btn btn-primary flex-1">
+                    {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating…</> : 'Create & Send OTP'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* ── OTP verification step ── */
+              <form onSubmit={handleVerifyOtp} className="space-y-5">
+                <p className="text-sm text-secondary-600 dark:text-secondary-300 text-center">
+                  A 6-digit OTP has been sent to{' '}
+                  <strong className="text-secondary-900 dark:text-white">{pendingEmail}</strong>.
+                  Enter it below to activate the staff account.
+                </p>
+
+                <Field label="OTP Code">
+                  <input
+                    className="input text-center text-2xl font-mono tracking-[0.4em]"
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="• • • • • •"
+                    value={otp}
+                    onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    autoFocus
+                  />
+                </Field>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => { setAddStep('form'); setOtp(''); }}
+                    className="btn btn-secondary flex-1"
+                  >
+                    ← Back
+                  </button>
+                  <button type="submit" disabled={saving || otp.length !== 6} className="btn btn-primary flex-1">
+                    {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</> : 'Verify & Activate'}
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-secondary-500">
+                  <span>Didn't receive it?</span>
+                  <button
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={resending}
+                    className="text-primary-600 dark:text-primary-400 hover:underline disabled:opacity-50 flex items-center gap-1"
+                  >
+                    {resending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                    Resend OTP
+                  </button>
+                </div>
+              </form>
+            )}
           </Modal>
         )}
       </AnimatePresence>
