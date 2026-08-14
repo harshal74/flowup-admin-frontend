@@ -29,9 +29,7 @@ export function MenuPage() {
   isRecommended: false,
 });
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  // BUG Y FIX: useCallback so useEffect dep array is stable
+  // fetchData defined BEFORE the useEffect that depends on it
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -48,6 +46,8 @@ export function MenuPage() {
       setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleSubmit = async (
   e: React.FormEvent
