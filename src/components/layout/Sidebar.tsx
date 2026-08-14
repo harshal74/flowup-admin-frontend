@@ -13,6 +13,7 @@ import {
   ChefHat,
   Bell,
   Receipt,
+  Table2,
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -31,6 +32,7 @@ const menuItems = [
   { path: '/menu',      label: 'Menu',      icon: UtensilsCrossed},
   { path: '/customers', label: 'Customers', icon: Users          },
   { path: '/billing',   label: 'Billing',   icon: Receipt        },
+  { path: '/tables',    label: 'Tables',    icon: Table2         },
   { path: '/settings',  label: 'Settings',  icon: Settings       },
 ];
 
