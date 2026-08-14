@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, Edit2, Trash2, FolderTree,
-  X, Image, GripVertical,
+  X, Image, GripVertical, AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import API, { RESTAURANT_ID } from '../lib/api';
@@ -14,7 +14,9 @@ export function CategoriesPage() {
   const [searchQuery, setSearchQuery]     = useState('');
   const [showModal, setShowModal]         = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [reordering, setReordering]       = useState<string | null>(null); // id being saved
+  const [reordering, setReordering]       = useState<string | null>(null);
+  // BUG Z FIX: replace window.confirm() with state-based confirmation
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '', description: '', image: '', isActive: true,
@@ -24,13 +26,11 @@ export function CategoriesPage() {
   const dragId    = useRef<string | null>(null); // id being dragged
   const dragOver  = useRef<string | null>(null); // id currently hovered
 
-  useEffect(() => { fetchCategories(); }, []);
-
-  const fetchCategories = async () => {
+  // BUG Y FIX: useCallback + move before useEffect
+  const fetchCategories = useCallback(async () => {
     try {
       setIsLoading(true);
       const res = await API.get('/categories');
-      // Always display sorted by displayOrder
       const sorted = (res.data.data || []).sort(
         (a: Category, b: Category) => a.displayOrder - b.displayOrder
       );
@@ -40,7 +40,9 @@ export function CategoriesPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => { fetchCategories(); }, [fetchCategories]);
 
   // ── Drag handlers ─────────────────────────────────────────────
   const onDragStart = (id: string) => {
@@ -117,7 +119,14 @@ export function CategoriesPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this category?')) return;
+    // BUG Z FIX: use state-based confirm modal instead of window.confirm()
+    setDeleteTargetId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTargetId) return;
+    const id = deleteTargetId;
+    setDeleteTargetId(null);
     try {
       await API.delete(`/categories/${id}`);
       toast.success('Category deleted');
@@ -405,6 +414,41 @@ export function CategoriesPage() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── BUG Z FIX: Delete Confirm Modal (replaces window.confirm) ── */}
+      <AnimatePresence>
+        {deleteTargetId && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={() => setDeleteTargetId(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-sm bg-white dark:bg-secondary-800 rounded-2xl p-6 shadow-2xl"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-danger-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-secondary-900 dark:text-white">Delete Category</h3>
+                  <p className="text-sm text-secondary-500 dark:text-secondary-400">This action cannot be undone.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteTargetId(null)} className="btn btn-secondary flex-1">
+                  Cancel
+                </button>
+                <button onClick={confirmDelete} className="btn btn-danger flex-1">
+                  Delete
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

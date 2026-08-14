@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, ShoppingBag, MapPin, Clock } from 'lucide-react';
 import { useNotification } from '../../context/NotificationContext';
@@ -134,40 +134,32 @@ export function NewOrderAlert() {
 
               {currentOrder && !rejectingOrderId && (
                 <div className="flex gap-3">
-  <button
-    onClick={async () => {
-      setProcessing(true);
+                  <button
+                    onClick={async () => {
+                      setProcessing(true);
+                      try {
+                        await acceptOrder(currentOrder._id);
+                      } finally {
+                        // BUG R FIX: always reset processing, even on error
+                        setProcessing(false);
+                      }
+                    }}
+                    disabled={processing}
+                    className="btn btn-success flex-1 py-3"
+                  >
+                    <Check className="w-5 h-5" />
+                    {processing ? "Accepting..." : "Accept Order"}
+                  </button>
 
-      await acceptOrder(
-        currentOrder._id
-      );
-
-      setProcessing(false);
-    }}
-    disabled={processing}
-    className="btn btn-success flex-1 py-3"
-  >
-    <Check className="w-5 h-5" />
-
-    {processing
-      ? "Accepting..."
-      : "Accept Order"}
-  </button>
-
-  <button
-    onClick={() =>
-      setRejectingOrderId(
-        currentOrder._id
-      )
-    }
-    disabled={processing}
-    className="btn btn-danger flex-1 py-3"
-  >
-    <X className="w-5 h-5" />
-
-    Reject Order
-  </button>
-</div>
+                  <button
+                    onClick={() => setRejectingOrderId(currentOrder._id)}
+                    disabled={processing}
+                    className="btn btn-danger flex-1 py-3"
+                  >
+                    <X className="w-5 h-5" />
+                    Reject Order
+                  </button>
+                </div>
               )}
 
               {rejectingOrderId && (

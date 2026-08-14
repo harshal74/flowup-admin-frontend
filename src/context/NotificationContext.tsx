@@ -146,6 +146,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       else if (pending.length === 0) stopRinging();
     } catch (e) {
       console.error("[Notification] refreshOrders:", e);
+      // BUG 25 FIX: stop ringing so the alarm doesn't loop forever on error
+      stopRinging();
     } finally {
       setIsLoading(false);
     }
@@ -191,12 +193,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     loadWaiterRequests();
     connectSocket();
 
-    const onConnect    = () => { setIsConnected(true);  console.log("[Socket] connected"); };
-    const onDisconnect = () => { setIsConnected(false); console.log("[Socket] disconnected"); };
+    const onConnect    = () => setIsConnected(true);
+    const onDisconnect = () => setIsConnected(false);
     const onError      = (err: Error) => console.error("[Socket]", err.message);
 
     const onNewOrder = (order: any) => {
-      console.log("[Socket] new_order:", order.orderNumber);
       setPendingOrders(prev => prev.some(o => o._id === order._id) ? prev : [order, ...prev]);
       if (soundRef.current) startRinging();
     };
@@ -213,7 +214,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
     const onWaiterRequested = (req: any) => {
       const id = String(req._id);
-      console.log("[Socket] waiter_requested Table", req.tableNumber);
       const item: WaiterRequest = {
         _id: id,
         tableNumber:  req.tableNumber,
@@ -225,20 +225,29 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       if (soundRef.current) playChime();
     };
 
-    socket.on("connect",              onConnect);
-    socket.on("disconnect",           onDisconnect);
-    socket.on("connect_error",        onError);
-    socket.on("new_order",            onNewOrder);
-    socket.on("order_status_updated", onStatusUpdated);
-    socket.on("waiter_requested",     onWaiterRequested);
+    // When waiter staff resolve/dismiss a request — remove it from admin panel too
+    const onWaiterRequestUpdated = (payload: { _id: string; status: string }) => {
+      if (payload.status === "COMPLETED") {
+        setWaiterRequests(prev => prev.filter(r => r._id !== payload._id));
+      }
+    };
+
+    socket.on("connect",               onConnect);
+    socket.on("disconnect",            onDisconnect);
+    socket.on("connect_error",         onError);
+    socket.on("new_order",             onNewOrder);
+    socket.on("order_status_updated",  onStatusUpdated);
+    socket.on("waiter_requested",      onWaiterRequested);
+    socket.on("waiter_request_updated", onWaiterRequestUpdated);
 
     return () => {
-      socket.off("connect",              onConnect);
-      socket.off("disconnect",           onDisconnect);
-      socket.off("connect_error",        onError);
-      socket.off("new_order",            onNewOrder);
-      socket.off("order_status_updated", onStatusUpdated);
-      socket.off("waiter_requested",     onWaiterRequested);
+      socket.off("connect",               onConnect);
+      socket.off("disconnect",            onDisconnect);
+      socket.off("connect_error",         onError);
+      socket.off("new_order",             onNewOrder);
+      socket.off("order_status_updated",  onStatusUpdated);
+      socket.off("waiter_requested",      onWaiterRequested);
+      socket.off("waiter_request_updated", onWaiterRequestUpdated);
       stopRinging();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

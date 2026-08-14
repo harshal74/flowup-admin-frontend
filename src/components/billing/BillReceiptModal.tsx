@@ -21,12 +21,15 @@ interface BillData {
 
 interface Props {
   bill: BillData;
+  /** UPI ID from restaurant settings (DB) — do NOT read from env */
+  upiId: string;
+  /** Restaurant name from DB settings */
+  restaurantName: string;
   onConfirm: () => Promise<void>;
   onCancel: () => Promise<void>;
 }
 
-// Build a UPI deep-link URL for the QR code
-// Format: upi://pay?pa=<id>&pn=<name>&am=<amount>&cu=INR
+// UPI deep-link: upi://pay?pa=<id>&pn=<name>&am=<amount>&cu=INR
 function buildUpiUrl(upiId: string, amount: number, name: string) {
   const params = new URLSearchParams({
     pa: upiId,
@@ -37,9 +40,6 @@ function buildUpiUrl(upiId: string, amount: number, name: string) {
   });
   return `upi://pay?${params.toString()}`;
 }
-
-const UPI_ID = import.meta.env.VITE_UPI_ID || "";
-const RESTAURANT_NAME = import.meta.env.VITE_RESTAURANT_NAME || "FlowUp Restaurant";
 
 /** Build a WhatsApp-friendly bill summary message */
 function buildWhatsAppMessage(bill: BillData, restaurantName: string): string {
@@ -69,12 +69,12 @@ function buildWhatsAppMessage(bill: BillData, restaurantName: string): string {
   );
 }
 
-export default function BillReceiptModal({ bill, onConfirm, onCancel }: Props) {
+export default function BillReceiptModal({ bill, upiId, restaurantName, onConfirm, onCancel }: Props) {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [cancelLoading,  setCancelLoading]  = useState(false);
 
   const isUPI = bill.paymentMethod === "UPI";
-  const upiUrl = buildUpiUrl(UPI_ID, bill.grandTotal, RESTAURANT_NAME);
+  const upiUrl = buildUpiUrl(upiId, bill.grandTotal, restaurantName);
 
   const handleConfirm = async () => {
     setConfirmLoading(true);
@@ -116,7 +116,7 @@ export default function BillReceiptModal({ bill, onConfirm, onCancel }: Props) {
 
           <div className="px-6 py-5 space-y-5">
             {/* UPI QR code */}
-            {isUPI && UPI_ID && (
+            {isUPI && upiId && (
               <div className="flex flex-col items-center gap-3 p-4
                               rounded-2xl bg-orange-50 dark:bg-orange-900/20
                               border border-orange-200 dark:border-orange-700">
@@ -126,14 +126,14 @@ export default function BillReceiptModal({ bill, onConfirm, onCancel }: Props) {
                 <div className="p-3 bg-white rounded-xl shadow-md">
                   <QRCodeSVG value={upiUrl} size={180} level="M" />
                 </div>
-                <p className="text-xs text-secondary-500 font-mono">{UPI_ID}</p>
+                <p className="text-xs text-secondary-500 font-mono">{upiId}</p>
                 <p className="text-2xl font-bold text-green-600">₹{bill.grandTotal.toFixed(2)}</p>
               </div>
             )}
 
-            {isUPI && !UPI_ID && (
+            {isUPI && !upiId && (
               <div className="p-4 rounded-xl bg-warning-50 dark:bg-warning-900/20 text-warning-700 text-sm text-center">
-                UPI ID not configured. Set <code>VITE_UPI_ID</code> in your .env file.
+                UPI ID not configured. Set it in restaurant Settings → UPI ID.
               </div>
             )}
 
@@ -200,7 +200,7 @@ export default function BillReceiptModal({ bill, onConfirm, onCancel }: Props) {
               <a
                 href={`https://wa.me/${
                   bill.customerMobile.replace(/\D/g, "").replace(/^0/, "91")
-                }?text=${encodeURIComponent(buildWhatsAppMessage(bill, RESTAURANT_NAME))}`}
+                }?text=${encodeURIComponent(buildWhatsAppMessage(bill, restaurantName))}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl

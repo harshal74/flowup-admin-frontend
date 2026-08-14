@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, Edit2, Trash2, Leaf, Flame, Star, Image, Filter, X } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Leaf, Flame, Star, Image, Filter, X, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import API from "../lib/api";
 import type { MenuItem, Category } from '../types';
@@ -15,6 +15,8 @@ export function MenuPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  // BUG Z FIX: replace window.confirm() with state-based modal
+  const [deleteMenuTargetId, setDeleteMenuTargetId] = useState<string | null>(null);
  const [formData, setFormData] = useState({
   name: "",
   description: "",
@@ -27,34 +29,25 @@ export function MenuPage() {
   isRecommended: false,
 });
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const fetchData = async () => {
-  try {
-    setIsLoading(true);
-
-    const [menuRes, categoryRes] =
-      await Promise.all([
+  // BUG Y FIX: useCallback so useEffect dep array is stable
+  const fetchData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const [menuRes, categoryRes] = await Promise.all([
         API.get("/menu/admin"),
         API.get("/categories"),
       ]);
-
-    setMenuItems(
-      menuRes.data.data || []
-    );
-
-    setCategories(
-      categoryRes.data.data || []
-    );
-  } catch (error) {
-    console.error(error);
-    toast.error(
-      "Failed to load menu"
-    );
-  } finally {
-    setIsLoading(false);
-  }
-};
+      setMenuItems(menuRes.data.data || []);
+      setCategories(categoryRes.data.data || []);
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to load menu");
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const handleSubmit = async (
   e: React.FormEvent
@@ -120,32 +113,23 @@ export function MenuPage() {
   }
 };
 
-  const handleDelete = async (
-  id: string
-) => {
-  if (
-    !confirm(
-      "Delete this item?"
-    )
-  )
-    return;
+  const handleDelete = async (id: string) => {
+    // BUG Z FIX: use state-based modal instead of window.confirm()
+    setDeleteMenuTargetId(id);
+  };
 
-  try {
-    await API.delete(
-      `/menu/${id}`
-    );
-
-    toast.success(
-      "Menu item deleted"
-    );
-
-    fetchData();
-  } catch (error) {
-    toast.error(
-      "Failed to delete item"
-    );
-  }
-};
+  const confirmDeleteMenu = async () => {
+    if (!deleteMenuTargetId) return;
+    const id = deleteMenuTargetId;
+    setDeleteMenuTargetId(null);
+    try {
+      await API.delete(`/menu/${id}`);
+      toast.success("Menu item deleted");
+      fetchData();
+    } catch (error) {
+      toast.error("Failed to delete item");
+    }
+  };
 
   const handleToggleAvailability =
   async (
@@ -277,8 +261,8 @@ export function MenuPage() {
                 <div><label className="label">Description</label><textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} className="input min-h-[80px]" placeholder="Describe the dish..." /></div>
                 <div><label className="label">Image URL</label><input type="url" value={formData.image} onChange={(e) => setFormData({ ...formData, image: e.target.value })} className="input" placeholder="https://example.com/image.jpg" /></div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className="label">Price ($)</label><input type="number" step="0.01" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="input" placeholder="0.00" required /></div>
-                  <div><label className="label">Discounted Price ($)</label><input type="number" step="0.01" value={formData.discountedPrice} onChange={(e) => setFormData({ ...formData, discountedPrice: e.target.value })} className="input" placeholder="Optional" /></div>
+                  <div><label className="label">Price (₹)</label><input type="number" step="0.01" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} className="input" placeholder="0.00" required /></div>
+                  <div><label className="label">Discounted Price (₹)</label><input type="number" step="0.01" value={formData.discountedPrice} onChange={(e) => setFormData({ ...formData, discountedPrice: e.target.value })} className="input" placeholder="Optional" /></div>
                 </div>
                 <div className="flex flex-wrap gap-4">
                   <label className="flex items-center gap-2 cursor-pointer"><input type="radio" name="dietary" checked={formData.isVeg} onChange={() => setFormData({ ...formData, isVeg: true })} className="w-4 h-4 text-success-500" /><span className="flex items-center gap-1 text-sm"><Leaf className="w-4 h-4 text-success-500" /> Vegetarian</span></label>
@@ -290,6 +274,37 @@ export function MenuPage() {
                 </div>
                 <div className="flex gap-3 pt-4"><button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary flex-1">Cancel</button><button type="submit" className="btn btn-primary flex-1">{editingItem ? 'Update' : 'Create'}</button></div>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── BUG Z FIX: Delete Menu Item Confirm Modal ── */}
+      <AnimatePresence>
+        {deleteMenuTargetId && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={() => setDeleteMenuTargetId(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-sm bg-white dark:bg-secondary-800 rounded-2xl p-6 shadow-2xl"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-danger-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-secondary-900 dark:text-white">Delete Menu Item</h3>
+                  <p className="text-sm text-secondary-500 dark:text-secondary-400">This action cannot be undone.</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setDeleteMenuTargetId(null)} className="btn btn-secondary flex-1">Cancel</button>
+                <button onClick={confirmDeleteMenu} className="btn btn-danger flex-1">Delete</button>
+              </div>
             </motion.div>
           </motion.div>
         )}

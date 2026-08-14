@@ -3,13 +3,14 @@ import { motion } from 'framer-motion';
 import {
   Save, Store, Phone, Mail, MapPin, MessageCircle, Star,
   ToggleLeft, ToggleRight, Loader2, Camera, Clock,
-  IndianRupee, Timer, ShoppingCart,
+  IndianRupee, Timer, ShoppingCart, Table2, AlertTriangle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRestaurant } from '../context/RestaurantContext';
+import API from '../lib/api';
 
 export function SettingsPage() {
-  const { restaurant, isLoading, updateRestaurant, toggleOpen, toggleFeedback, toggleWhatsapp } = useRestaurant();
+  const { restaurant, isLoading, updateRestaurant, toggleOpen, toggleFeedback, toggleWhatsapp, refreshRestaurant } = useRestaurant();
 
   const [formData, setFormData] = useState({
     restaurantName: '',
@@ -26,9 +27,13 @@ export function SettingsPage() {
     closingTime: '23:00',
     currency: 'INR',
     upiId: '',
+    totalTables: 10,
   });
 
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSaving,         setIsSaving]         = useState(false);
+  const [tableError,       setTableError]        = useState('');
+  const [tableWarning,     setTableWarning]      = useState('');
+  const [isSavingTables,   setIsSavingTables]    = useState(false);
 
   useEffect(() => {
     if (restaurant) {
@@ -47,12 +52,56 @@ export function SettingsPage() {
         closingTime:            restaurant.closingTime            || '23:00',
         currency:               restaurant.currency               || 'INR',
         upiId:                  restaurant.upiId                  || '',
+        totalTables:            restaurant.totalTables            ?? 10,
       });
+      setTableError('');
+      setTableWarning('');
     }
   }, [restaurant]);
 
   const set = (key: string, value: any) =>
     setFormData((prev) => ({ ...prev, [key]: value }));
+
+  // ── Validate totalTables client-side ────────────────────────
+  const validateTables = (val: number): string => {
+    if (!Number.isInteger(val) || isNaN(val)) return 'Total tables must be a whole number.';
+    if (val < 1)   return 'Total tables must be at least 1.';
+    if (val > 200) return 'Total tables cannot exceed 200.';
+    return '';
+  };
+
+  const handleTableChange = (val: number) => {
+    set('totalTables', val);
+    setTableError(validateTables(val));
+    setTableWarning('');
+  };
+
+  // ── Save only totalTables (separate save button) ─────────────
+  const handleSaveTables = async () => {
+    const err = validateTables(formData.totalTables);
+    if (err) { setTableError(err); return; }
+
+    setIsSavingTables(true);
+    setTableWarning('');
+    setTableError('');
+
+    try {
+      await API.put('/settings', { totalTables: formData.totalTables });
+      await refreshRestaurant();
+      toast.success(`Table count updated to ${formData.totalTables}`);
+    } catch (error: any) {
+      const msg    = error?.response?.data?.message || 'Failed to update table count';
+      const status = error?.response?.status;
+      if (status === 409) {
+        // Unsafe reduce — show warning, do NOT save
+        setTableWarning(msg);
+      } else {
+        toast.error(msg);
+      }
+    } finally {
+      setIsSavingTables(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -332,6 +381,74 @@ export function SettingsPage() {
           </button>
         </div>
       </form>
+
+      {/* ── Table Management (separate save — own validation) ── */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="card p-6 max-w-4xl">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-9 h-9 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+            <Table2 className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-secondary-900 dark:text-white">Table Management</h2>
+            <p className="text-xs text-secondary-400 dark:text-secondary-500">
+              Controls the number of tables available in your restaurant.
+              Currently: <strong className="text-secondary-700 dark:text-secondary-200">{restaurant?.totalTables ?? 10} tables</strong>
+            </p>
+          </div>
+        </div>
+
+        <div className="max-w-xs space-y-4">
+          <div>
+            <label className="label">Total Tables</label>
+            <div className="relative">
+              <Table2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-secondary-400" />
+              <input
+                type="number"
+                min={1}
+                max={200}
+                step={1}
+                value={formData.totalTables}
+                onChange={(e) => handleTableChange(
+                  e.target.value === '' ? 0 : Math.floor(Number(e.target.value))
+                )}
+                className={`input pl-12 ${tableError ? 'border-danger-500' : ''}`}
+                placeholder="10"
+              />
+            </div>
+            <p className="text-xs text-secondary-400 mt-1">
+              Allowed range: 1–200 tables. Changes take effect immediately for new orders.
+            </p>
+
+            {/* Validation error */}
+            {tableError && (
+              <div className="flex items-start gap-2 mt-2 p-3 rounded-xl bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800">
+                <AlertTriangle className="w-4 h-4 text-danger-600 dark:text-danger-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-danger-600 dark:text-danger-400">{tableError}</p>
+              </div>
+            )}
+
+            {/* Unsafe reduce warning */}
+            {tableWarning && (
+              <div className="flex items-start gap-2 mt-2 p-3 rounded-xl bg-warning-50 dark:bg-warning-900/20 border border-warning-200 dark:border-warning-800">
+                <AlertTriangle className="w-4 h-4 text-warning-600 dark:text-warning-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-warning-700 dark:text-warning-300">{tableWarning}</p>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSaveTables}
+            disabled={isSavingTables || !!tableError}
+            className="btn btn-primary"
+          >
+            {isSavingTables
+              ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</>
+              : <><Save className="w-4 h-4" /> Save Table Count</>
+            }
+          </button>
+        </div>
+      </motion.div>
     </div>
   );
 }

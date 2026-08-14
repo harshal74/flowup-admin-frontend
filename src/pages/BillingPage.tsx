@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, User, MapPin, Check, Clock, ChefHat, Package,
@@ -52,6 +52,9 @@ export default function BillingPage() {
   const [loading,        setLoading]        = useState(true);
   const [billingLoading, setBillingLoading] = useState(false);
   const [activeBill,     setActiveBill]     = useState<GeneratedBill | null>(null);
+  // Payment settings returned by the generateBill API — UPI ID comes from DB, not env
+  const [upiId,          setUpiId]          = useState("");
+  const [restaurantName, setRestaurantName] = useState("FlowUp Restaurant");
   const [selectedOrder,  setSelectedOrder]  = useState<Order | null>(null);
   const [showDrawer,     setShowDrawer]     = useState(false);
 
@@ -61,7 +64,8 @@ export default function BillingPage() {
   const [discount,       setDiscount]       = useState(0);
   const [paymentMethod,  setPaymentMethod]  = useState("Cash");
 
-  const fetchOrders = async () => {
+  // BUG M FIX: wrap in useCallback so the debounce effect always has a fresh reference
+  const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
       const response = await getUnpaidOrders(customerSearch, tableSearch);
@@ -71,13 +75,13 @@ export default function BillingPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [customerSearch, tableSearch]);
 
-  useEffect(() => { fetchOrders(); }, []);
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
   useEffect(() => {
     const t = setTimeout(() => fetchOrders(), 400);
     return () => clearTimeout(t);
-  }, [customerSearch, tableSearch]);
+  }, [customerSearch, tableSearch, fetchOrders]);
 
   const handleSelectOrder = (id: string) =>
     setSelectedOrders(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -88,8 +92,6 @@ export default function BillingPage() {
   const selected = useMemo(() => orders.filter(o => selectedOrders.includes(o._id)), [orders, selectedOrders]);
   const subtotal  = useMemo(() => selected.reduce((s, o) => s + o.totalAmount, 0), [selected]);
   const gst       = useMemo(() => Number((subtotal * 0.05).toFixed(2)), [subtotal]);
-  // Mirror backend behaviour: grandTotal cannot go below 0
-  const grandTotal = useMemo(() => Math.max(0, subtotal + gst - discount), [subtotal, gst, discount]);
 
   const handleGenerateBill = async () => {
     if (selectedOrders.length === 0) { toast.error("Please select at least one order."); return; }
@@ -102,6 +104,9 @@ export default function BillingPage() {
         customerName:   response.customer?.name   || "",
         customerMobile: response.customer?.mobile || "",
       });
+      // UPI ID and restaurant name come from the DB via the API response
+      setUpiId(response.paymentSettings?.upiId || "");
+      setRestaurantName(response.paymentSettings?.restaurantName || "FlowUp Restaurant");
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Failed to generate bill.");
     } finally {
@@ -166,9 +171,15 @@ export default function BillingPage() {
         />
       </div>
 
-      {/* Bill receipt / payment modal */}
+      {/* Bill receipt / payment modal — upiId and restaurantName come from DB via API */}
       {activeBill && (
-        <BillReceiptModal bill={activeBill} onConfirm={handleConfirmPayment} onCancel={handleCancelBill} />
+        <BillReceiptModal
+          bill={activeBill}
+          upiId={upiId}
+          restaurantName={restaurantName}
+          onConfirm={handleConfirmPayment}
+          onCancel={handleCancelBill}
+        />
       )}
 
       {/* ── Order detail drawer (same as OrdersPage) ─────────── */}

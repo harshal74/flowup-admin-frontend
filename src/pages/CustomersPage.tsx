@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Eye, UserX, UserCheck, Phone, Calendar,
@@ -28,9 +28,8 @@ export function CustomersPage() {
   const [showDrawer, setShowDrawer]             = useState(false);
   const [updatingId, setUpdatingId]             = useState<string | null>(null);
 
-  useEffect(() => { fetchCustomers(); }, []);
-
-  const fetchCustomers = async () => {
+  // BUG X FIX: useCallback so useEffect dep array is correct and no stale closure
+  const fetchCustomers = useCallback(async () => {
     try {
       setIsLoading(true);
       const res = await API.get('/customers');
@@ -40,7 +39,9 @@ export function CustomersPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => { fetchCustomers(); }, [fetchCustomers]);
 
   const handleToggleBlock = async (customer: Customer) => {
     try {

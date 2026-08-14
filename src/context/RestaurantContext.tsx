@@ -97,52 +97,40 @@ export function RestaurantProvider({
       }
     };
 
-  const toggleOpen =
-    async () => {
-      try {
-        if (
-          restaurant?.shopOpen
-        ) {
-          await API.patch(
-            "/settings/close"
-          );
-        } else {
-          await API.patch(
-            "/settings/open"
-          );
-        }
-
-        await fetchRestaurant();
-      } catch (error) {
-        console.error(error);
+  const toggleOpen = async () => {
+    try {
+      if (restaurant?.shopOpen) {
+        await API.patch("/settings/close");
+      } else {
+        await API.patch("/settings/open");
       }
-    };
+      await fetchRestaurant();
+    } catch (error: any) {
+      // BUG G FIX: surface error so caller can show toast
+      console.error("toggleOpen error:", error);
+      throw error;
+    }
+  };
 
-  const toggleFeedback =
-    async () => {
-      try {
-        await API.patch(
-          "/settings/feedback"
-        );
+  const toggleFeedback = async () => {
+    try {
+      await API.patch("/settings/feedback");
+      await fetchRestaurant();
+    } catch (error: any) {
+      console.error("toggleFeedback error:", error);
+      throw error;
+    }
+  };
 
-        await fetchRestaurant();
-      } catch (error) {
-        console.error(error);
-      }
-    };
-
-  const toggleWhatsapp =
-    async () => {
-      try {
-        await API.patch(
-          "/settings/whatsapp"
-        );
-
-        await fetchRestaurant();
-      } catch (error) {
-        console.error(error);
-      }
-    };
+  const toggleWhatsapp = async () => {
+    try {
+      await API.patch("/settings/whatsapp");
+      await fetchRestaurant();
+    } catch (error: any) {
+      console.error("toggleWhatsapp error:", error);
+      throw error;
+    }
+  };
 
   return (
     <RestaurantContext.Provider

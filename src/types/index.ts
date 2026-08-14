@@ -25,6 +25,9 @@ export interface Restaurant {
   currency: string;
   upiId?: string;
 
+  /** Dynamic table configuration */
+  totalTables?: number;
+
   createdAt?: string;
   updatedAt?: string;
 }
@@ -170,6 +173,8 @@ export interface Order {
   note?: string;
 
   address?: string;
+
+  billId?: string | null;
 
   status: OrderStatus;
 

@@ -47,27 +47,29 @@ export function AuthProvider({
 
   useEffect(() => {
     try {
-      const storedUser =
-        localStorage.getItem(
-          AUTH_USER_KEY
-        );
-
-      const token =
-        localStorage.getItem(
-          AUTH_TOKEN_KEY
-        );
+      const storedUser = localStorage.getItem(AUTH_USER_KEY);
+      const token      = localStorage.getItem(AUTH_TOKEN_KEY);
 
       if (storedUser && token) {
+        // BUG 26 FIX: check token expiry before restoring session
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          if (payload.exp * 1000 <= Date.now()) {
+            // Token expired — clear stale session
+            localStorage.removeItem(AUTH_USER_KEY);
+            localStorage.removeItem(AUTH_TOKEN_KEY);
+            return;
+          }
+        } catch {
+          localStorage.removeItem(AUTH_USER_KEY);
+          localStorage.removeItem(AUTH_TOKEN_KEY);
+          return;
+        }
         setUser(JSON.parse(storedUser));
       }
     } catch (error) {
-      localStorage.removeItem(
-        AUTH_USER_KEY
-      );
-
-      localStorage.removeItem(
-        AUTH_TOKEN_KEY
-      );
+      localStorage.removeItem(AUTH_USER_KEY);
+      localStorage.removeItem(AUTH_TOKEN_KEY);
     } finally {
       setIsLoading(false);
     }

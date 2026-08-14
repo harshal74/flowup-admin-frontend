@@ -5,8 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 export function LoginPage() {
-  const [email, setEmail] = useState('admin@flowup.com');
-  const [password, setPassword] = useState('123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -91,7 +91,9 @@ export function LoginPage() {
           </form>
 
           <div className="mt-6 pt-6 border-t border-secondary-200 dark:border-secondary-700">
-            <p className="text-center text-sm text-secondary-500 dark:text-secondary-400">Demo credentials: admin@flowup.com / 123456</p>
+            <p className="text-center text-sm text-secondary-500 dark:text-secondary-400">
+              Enter your admin credentials to sign in
+            </p>
           </div>
         </div>
         <p className="text-center text-xs text-secondary-400 dark:text-secondary-500 mt-6">© 2024 FlowUp. All rights reserved.</p>

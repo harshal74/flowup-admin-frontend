@@ -42,6 +42,8 @@ export function OrdersPage() {
   const [showFilters, setShowFilters]     = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showDrawer, setShowDrawer]       = useState(false);
+  const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason]     = useState('');
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);
 
   // ── Initial REST load + socket listeners ──────────────────────
@@ -237,8 +239,9 @@ export function OrdersPage() {
               >
                 <Check className="w-3.5 h-3.5" /> Accept
               </button>
+              {/* BUG V FIX: replace prompt() with inline state-driven modal */}
               <button
-                onClick={() => { const r = prompt('Rejection reason:'); if (r) handleRejectOrder(order._id, r); }}
+                onClick={() => { setRejectTargetId(order._id); setRejectReason(''); }}
                 disabled={statusUpdating === order._id}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-500 hover:bg-red-600 text-white text-xs font-medium transition-colors disabled:opacity-50"
               >
@@ -707,6 +710,60 @@ export function OrdersPage() {
               </div>{/* end drawer body */}
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* ── BUG V FIX: Reject Order Modal (replaces prompt()) ──── */}
+      <AnimatePresence>
+        {rejectTargetId && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={() => setRejectTargetId(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-md bg-white dark:bg-secondary-800 rounded-2xl p-6 shadow-2xl"
+            >
+              <h3 className="text-lg font-bold text-secondary-900 dark:text-white mb-4">
+                Reject Order
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="label">Rejection Reason</label>
+                  <textarea
+                    value={rejectReason}
+                    onChange={e => setRejectReason(e.target.value)}
+                    className="input min-h-[100px]"
+                    placeholder="e.g., Out of stock, Kitchen closed…"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setRejectTargetId(null); setRejectReason(''); }}
+                    className="btn btn-secondary flex-1"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!rejectReason.trim()) return;
+                      const id = rejectTargetId;
+                      setRejectTargetId(null);
+                      setRejectReason('');
+                      await handleRejectOrder(id, rejectReason.trim());
+                    }}
+                    disabled={!rejectReason.trim()}
+                    className="btn btn-danger flex-1"
+                  >
+                    Reject Order
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
 
