@@ -14,6 +14,7 @@ import {
   Bell,
   Receipt,
   Table2,
+  UserCog,
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -33,6 +34,7 @@ const menuItems = [
   { path: '/customers', label: 'Customers', icon: Users          },
   { path: '/billing',   label: 'Billing',   icon: Receipt        },
   { path: '/tables',    label: 'Tables',    icon: Table2         },
+  { path: '/staff',     label: 'Staff',     icon: UserCog        },
   { path: '/settings',  label: 'Settings',  icon: Settings       },
 ];
 
