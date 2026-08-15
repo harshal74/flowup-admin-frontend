@@ -114,7 +114,7 @@ export default function StaffPage() {
 
   // Order detail (opened from activity timeline)
   const [activityOrder,        setActivityOrder]        = useState<Order | null>(null);
-  const [activityOrderLoading, setActivityOrderLoading] = useState(false);
+  const [loadingOrderId,       setLoadingOrderId]       = useState<string | null>(null);
 
   // ── Fetch staff list ──────────────────────────────────────────
   const fetchStaff = useCallback(async () => {
@@ -241,15 +241,15 @@ export default function StaffPage() {
 
   // ── Open order from activity timeline ───────────────────────
   const openActivityOrder = async (orderId: string) => {
-    if (!orderId || activityOrderLoading) return;
-    setActivityOrderLoading(true);
+    if (!orderId || loadingOrderId === orderId) return;
+    setLoadingOrderId(orderId);
     try {
       const res = await API.get(`/orders/${orderId}`);
       setActivityOrder(res.data.data || null);
     } catch {
       toast.error('Failed to load order details');
     } finally {
-      setActivityOrderLoading(false);
+      setLoadingOrderId(null);
     }
   };
 
@@ -864,11 +864,11 @@ export default function StaffPage() {
                                     {isOrder && a.entityId && (
                                       <button
                                         onClick={() => openActivityOrder(a.entityId as string)}
-                                        disabled={activityOrderLoading}
+                                        disabled={loadingOrderId === a.entityId}
                                         className="flex items-center gap-1 text-[10px] font-medium text-primary-600 dark:text-primary-400
                                                    hover:text-primary-700 dark:hover:text-primary-300 transition-colors disabled:opacity-50"
                                       >
-                                        {activityOrderLoading
+                                        {loadingOrderId === a.entityId
                                           ? <Loader2 className="w-3 h-3 animate-spin" />
                                           : <ExternalLink className="w-3 h-3" />
                                         }
