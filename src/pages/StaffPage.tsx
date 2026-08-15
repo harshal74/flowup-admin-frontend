@@ -99,9 +99,10 @@ export default function StaffPage() {
   const [blocking, setBlocking] = useState(false);
 
   // Add-staff OTP step
-  const [addStep,     setAddStep]     = useState<'form' | 'otp'>('form');
+  const [addStep,        setAddStep]        = useState<'form' | 'otp'>('form');
   const [pendingStaffId, setPendingStaffId] = useState<string>('');
   const [pendingEmail,   setPendingEmail]   = useState<string>('');
+  const [emailSent,      setEmailSent]      = useState<boolean>(true);
   const [otp,            setOtp]            = useState('');
   const [resending,      setResending]      = useState(false);
   const [activities,      setActivities]      = useState<ActivityEntry[]>([]);
@@ -165,17 +166,23 @@ export default function StaffPage() {
         role:     addForm.role,
         password: addForm.password,
       });
+
       setPendingStaffId(res.data.staffId);
       setPendingEmail(res.data.email || addForm.email.trim());
+      setEmailSent(res.data.emailSent !== false);
       setOtp('');
 
-      if (res.data.devNote) {
-        toast('SMTP not configured — check backend terminal for OTP', { icon: '🖥️', duration: 8000 });
-      } else if (res.data.emailError) {
-        toast('OTP email failed — check backend terminal', { icon: '⚠️', duration: 8000 });
+      if (res.data.emailSent === false) {
+        // Account created but email delivery failed — tell admin clearly
+        toast('Staff account created, but the OTP email could not be sent.\nCheck backend terminal and use Resend OTP.', {
+          icon: '⚠️',
+          duration: 8000,
+        });
       } else {
+        // emailSent === true (or not present in older response format)
         toast.success('Account created! OTP sent to staff email.');
       }
+      // Always advance to OTP step — admin can use Resend if email failed
       setAddStep('otp');
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to create staff');
@@ -209,8 +216,15 @@ export default function StaffPage() {
     if (resending) return;
     setResending(true);
     try {
-      await API.post(`/admin/staff/${pendingStaffId}/resend-otp`);
-      toast.success('New OTP sent!');
+      const res = await API.post(`/admin/staff/${pendingStaffId}/resend-otp`);
+      if (res.data.emailSent === false) {
+        toast('New OTP generated but email could not be sent.\nCheck backend terminal.', {
+          icon: '⚠️',
+          duration: 8000,
+        });
+      } else {
+        toast.success('New OTP sent to staff email!');
+      }
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to resend OTP');
     } finally {
@@ -222,6 +236,7 @@ export default function StaffPage() {
     setShowAddModal(false);
     setAddStep('form');
     setOtp('');
+    setEmailSent(true);
     setPendingStaffId('');
     setPendingEmail('');
     setAddForm({ name:'', email:'', mobile:'', role:'WAITER', password:'', confirmPassword:'' });
@@ -529,11 +544,24 @@ export default function StaffPage() {
             ) : (
               /* ── OTP verification step ── */
               <form onSubmit={handleVerifyOtp} className="space-y-5">
-                <p className="text-sm text-secondary-600 dark:text-secondary-300 text-center">
-                  A 6-digit OTP has been sent to{' '}
-                  <strong className="text-secondary-900 dark:text-white">{pendingEmail}</strong>.
-                  Enter it below to activate the staff account.
-                </p>
+                {/* Email delivery status banner */}
+                {!emailSent ? (
+                  <div className="flex items-start gap-2 p-3 rounded-xl
+                                  bg-warning-50 dark:bg-warning-900/20
+                                  border border-warning-200 dark:border-warning-800">
+                    <AlertTriangle className="w-4 h-4 text-warning-600 dark:text-warning-400 shrink-0 mt-0.5" />
+                    <div className="text-sm text-warning-700 dark:text-warning-300">
+                      <p className="font-semibold">OTP email could not be sent.</p>
+                      <p className="mt-0.5">Check the backend terminal for the OTP code, or use the Resend button below after fixing the email configuration.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-secondary-600 dark:text-secondary-300 text-center">
+                    A 6-digit OTP has been sent to{' '}
+                    <strong className="text-secondary-900 dark:text-white">{pendingEmail}</strong>.
+                    Enter it below to activate the staff account.
+                  </p>
+                )}
 
                 <Field label="OTP Code">
                   <input
