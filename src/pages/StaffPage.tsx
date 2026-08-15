@@ -424,10 +424,15 @@ export default function StaffPage() {
               >
                 {/* Staff info */}
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
-                                   shrink-0 ${s.isActive ? 'bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400'
-                                                          : 'bg-secondary-200 text-secondary-500 dark:bg-secondary-700'}`}>
-                    {s.name.charAt(0).toUpperCase()}
+                  <div className={`w-10 h-10 rounded-full overflow-hidden shrink-0 flex items-center justify-center
+                                   font-bold text-sm
+                                   ${s.isActive
+                                     ? 'bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400'
+                                     : 'bg-secondary-200 text-secondary-500 dark:bg-secondary-700'}`}>
+                    {s.profileImage
+                      ? <img src={s.profileImage} alt={s.name} className="w-full h-full object-cover" />
+                      : s.name.charAt(0).toUpperCase()
+                    }
                   </div>
                   <div className="min-w-0">
                     <p className="font-semibold text-secondary-900 dark:text-white truncate">{s.name}</p>
@@ -692,11 +697,15 @@ export default function StaffPage() {
             <div className="space-y-5">
               {/* Avatar + name */}
               <div className="text-center">
-                <div className={`w-20 h-20 rounded-full mx-auto flex items-center justify-center font-bold text-2xl
+                <div className={`w-20 h-20 rounded-full mx-auto overflow-hidden flex items-center justify-center
+                                 font-bold text-2xl
                                  ${selected.isActive
                                    ? 'bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400'
                                    : 'bg-secondary-200 text-secondary-500 dark:bg-secondary-700'}`}>
-                  {selected.name.charAt(0).toUpperCase()}
+                  {selected.profileImage
+                    ? <img src={selected.profileImage} alt={selected.name} className="w-full h-full object-cover" />
+                    : selected.name.charAt(0).toUpperCase()
+                  }
                 </div>
                 <h3 className="mt-3 text-xl font-bold text-secondary-900 dark:text-white">{selected.name}</h3>
                 <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
