@@ -196,11 +196,23 @@ export function MenuPage() {
 
   const filteredItems = menuItems.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || (item.description?.toLowerCase() || '').includes(searchQuery.toLowerCase());
-    // item.categoryId may be a populated object { _id, name } or a plain string — handle both
-    const catId = item.categoryId
-      ? (typeof item.categoryId === 'object' ? (item.categoryId as any)._id : item.categoryId)
-      : '';
-    const matchesCategory = !filterCategory || catId === filterCategory;
+
+    // The backend .populate("categoryId", "name") may put the result in either:
+    // - item.categoryId (as populated object { _id, name }) — Mongoose default
+    // - item.category   (the typed Category field)
+    // We extract the ID from whichever is available.
+    let catId = '';
+    if (item.category && item.category._id) {
+      catId = String(item.category._id).trim();
+    } else if (item.categoryId) {
+      if (typeof item.categoryId === 'object' && '_id' in (item.categoryId as any)) {
+        catId = String((item.categoryId as any)._id).trim();
+      } else {
+        catId = String(item.categoryId).trim();
+      }
+    }
+
+    const matchesCategory = !filterCategory || catId === filterCategory.trim();
     const matchesVeg = !filterVeg || (filterVeg === 'veg' ? item.isVeg : !item.isVeg);
     return matchesSearch && matchesCategory && matchesVeg;
   });
