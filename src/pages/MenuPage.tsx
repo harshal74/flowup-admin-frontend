@@ -196,7 +196,11 @@ export function MenuPage() {
 
   const filteredItems = menuItems.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || (item.description?.toLowerCase() || '').includes(searchQuery.toLowerCase());
-    const matchesCategory = !filterCategory || item.categoryId === filterCategory;
+    // item.categoryId may be a populated object { _id, name } or a plain string — handle both
+    const catId = item.categoryId
+      ? (typeof item.categoryId === 'object' ? (item.categoryId as any)._id : item.categoryId)
+      : '';
+    const matchesCategory = !filterCategory || catId === filterCategory;
     const matchesVeg = !filterVeg || (filterVeg === 'veg' ? item.isVeg : !item.isVeg);
     return matchesSearch && matchesCategory && matchesVeg;
   });
