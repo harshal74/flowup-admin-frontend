@@ -861,20 +861,29 @@ export default function StaffPage() {
                                     </span>
 
                                     {/* Clickable "Open Order" when entityId is available */}
-                                    {isOrder && a.entityId && (
-                                      <button
-                                        onClick={() => openActivityOrder(a.entityId as string)}
-                                        disabled={loadingOrderId === a.entityId}
-                                        className="flex items-center gap-1 text-[10px] font-medium text-primary-600 dark:text-primary-400
-                                                   hover:text-primary-700 dark:hover:text-primary-300 transition-colors disabled:opacity-50"
-                                      >
-                                        {loadingOrderId === a.entityId
-                                          ? <Loader2 className="w-3 h-3 animate-spin" />
-                                          : <ExternalLink className="w-3 h-3" />
-                                        }
-                                        View Order
-                                      </button>
-                                    )}
+                                    {/* View Order — only shown when entityId is a valid MongoDB ObjectId */}
+                                    {isOrder && a.entityId &&
+                                     typeof a.entityId === 'string' &&
+                                     /^[a-f\d]{24}$/i.test(a.entityId) && (() => {
+                                       const isThisLoading = loadingOrderId !== null && loadingOrderId === a.entityId;
+                                       return (
+                                         <button
+                                           onClick={() => !isThisLoading && openActivityOrder(a.entityId!)}
+                                           disabled={isThisLoading}
+                                           className="flex items-center gap-1 text-[10px] font-medium
+                                                      text-primary-600 dark:text-primary-400
+                                                      hover:text-primary-700 dark:hover:text-primary-300
+                                                      transition-colors disabled:opacity-50"
+                                         >
+                                           {isThisLoading
+                                             ? <Loader2 className="w-3 h-3 animate-spin" />
+                                             : <ExternalLink className="w-3 h-3" />
+                                           }
+                                           {isThisLoading ? 'Loading…' : 'View Order'}
+                                         </button>
+                                       );
+                                     })()
+                                    }
                                   </div>
                                 )}
                               </div>
