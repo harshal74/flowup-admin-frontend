@@ -4,9 +4,11 @@ import {
   Search, Plus, X, Edit2, UserX, UserCheck, Eye,
   ChefHat, Coffee, User, Shield, Loader2, Clock,
   Activity, AlertTriangle, RefreshCw, Filter,
+  ExternalLink, MapPin,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import API from '../lib/api';
+import type { Order } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -105,9 +107,14 @@ export default function StaffPage() {
   const [emailSent,      setEmailSent]      = useState<boolean>(true);
   const [otp,            setOtp]            = useState('');
   const [resending,      setResending]      = useState(false);
+  // Activity
   const [activities,      setActivities]      = useState<ActivityEntry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityDays,    setActivityDays]    = useState(7);
+
+  // Order detail (opened from activity timeline)
+  const [activityOrder,        setActivityOrder]        = useState<Order | null>(null);
+  const [activityOrderLoading, setActivityOrderLoading] = useState(false);
 
   // ── Fetch staff list ──────────────────────────────────────────
   const fetchStaff = useCallback(async () => {
@@ -232,8 +239,21 @@ export default function StaffPage() {
     }
   };
 
-  const closeAddModal = () => {
-    setShowAddModal(false);
+  // ── Open order from activity timeline ───────────────────────
+  const openActivityOrder = async (orderId: string) => {
+    if (!orderId || activityOrderLoading) return;
+    setActivityOrderLoading(true);
+    try {
+      const res = await API.get(`/orders/${orderId}`);
+      setActivityOrder(res.data.data || null);
+    } catch {
+      toast.error('Failed to load order details');
+    } finally {
+      setActivityOrderLoading(false);
+    }
+  };
+
+  const closeAddModal = () => {    setShowAddModal(false);
     setAddStep('form');
     setOtp('');
     setEmailSent(true);
@@ -798,42 +818,196 @@ export default function StaffPage() {
                   <div className="absolute left-4 top-0 bottom-0 w-px bg-secondary-200 dark:bg-secondary-700" />
 
                   <div className="space-y-3 pl-10">
-                    {activities.map(a => (
-                      <div key={a._id} className="relative">
-                        {/* Dot */}
-                        <div className="absolute -left-[26px] top-3 w-3 h-3 rounded-full bg-primary-500 border-2 border-white dark:border-secondary-900" />
+                    {activities.map(a => {
+                      const isOrder   = a.entityType === 'Order';
+                      const isAuth    = a.action === 'LOGIN' || a.action === 'LOGOUT';
+                      const isStaff   = a.action.startsWith('STAFF_');
+                      const dotColor  = isOrder  ? 'bg-orange-500'
+                                      : isAuth   ? 'bg-green-500'
+                                      : isStaff  ? 'bg-blue-500'
+                                      : 'bg-primary-500';
 
-                        <div className="card p-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-secondary-900 dark:text-white">
-                                {a.action.replace(/_/g, ' ')}
-                              </p>
-                              {(a.oldValue || a.newValue) && (
-                                <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-0.5">
-                                  {a.oldValue && a.newValue
-                                    ? `${a.oldValue} → ${a.newValue}`
-                                    : a.newValue || a.oldValue
-                                  }
+                      return (
+                        <div key={a._id} className="relative">
+                          {/* Dot */}
+                          <div className={`absolute -left-[26px] top-3.5 w-3 h-3 rounded-full ${dotColor} border-2 border-white dark:border-secondary-900`} />
+
+                          <div className="card p-3 hover:border-secondary-300 dark:hover:border-secondary-600 transition-colors">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                {/* Action label */}
+                                <p className="text-sm font-semibold text-secondary-900 dark:text-white">
+                                  {a.action.replace(/_/g, ' ')}
                                 </p>
-                              )}
-                              {a.entityType && (
-                                <p className="text-xs text-secondary-400 mt-0.5">{a.entityType}</p>
-                              )}
+
+                                {/* Status transition */}
+                                {(a.oldValue || a.newValue) && (
+                                  <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-0.5">
+                                    {a.oldValue && a.newValue
+                                      ? <span><span className="text-secondary-400">{a.oldValue}</span> → <span className="font-medium text-secondary-700 dark:text-secondary-200">{a.newValue}</span></span>
+                                      : a.newValue || a.oldValue
+                                    }
+                                  </p>
+                                )}
+
+                                {/* Entity type + open order link */}
+                                {a.entityType && (
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className={`text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full
+                                      ${isOrder  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                                                 : 'bg-secondary-100 text-secondary-500 dark:bg-secondary-700 dark:text-secondary-400'
+                                      }`}>
+                                      {a.entityType}
+                                    </span>
+
+                                    {/* Clickable "Open Order" when entityId is available */}
+                                    {isOrder && a.entityId && (
+                                      <button
+                                        onClick={() => openActivityOrder(a.entityId as string)}
+                                        disabled={activityOrderLoading}
+                                        className="flex items-center gap-1 text-[10px] font-medium text-primary-600 dark:text-primary-400
+                                                   hover:text-primary-700 dark:hover:text-primary-300 transition-colors disabled:opacity-50"
+                                      >
+                                        {activityOrderLoading
+                                          ? <Loader2 className="w-3 h-3 animate-spin" />
+                                          : <ExternalLink className="w-3 h-3" />
+                                        }
+                                        View Order
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              <time className="text-xs text-secondary-400 shrink-0 whitespace-nowrap text-right">
+                                {new Date(a.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                <span className="block text-[10px]">
+                                  {new Date(a.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                </span>
+                              </time>
                             </div>
-                            <time className="text-xs text-secondary-400 shrink-0 whitespace-nowrap">
-                              {new Date(a.timestamp).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                              <span className="block text-[10px]">
-                                {new Date(a.timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                              </span>
-                            </time>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
+            </div>
+          </Drawer>
+        )}
+      </AnimatePresence>
+
+      {/* ══════════════════════════════════════════════════════════
+          ORDER DETAIL (from activity timeline)
+      ══════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {activityOrder && (
+          <Drawer onClose={() => setActivityOrder(null)} title={`Order #${activityOrder.orderNumber}`} wide>
+            <div className="space-y-4 text-sm">
+              {/* Status + type */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`px-2.5 py-1 rounded-xl text-xs font-semibold
+                  ${activityOrder.status === 'COMPLETED'  ? 'bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-400'
+                  : activityOrder.status === 'REJECTED'   ? 'bg-danger-100 text-danger-700 dark:bg-danger-900/30 dark:text-danger-400'
+                  : activityOrder.status === 'PENDING'    ? 'bg-warning-100 text-warning-700 dark:bg-warning-900/30 dark:text-warning-400'
+                  : 'bg-secondary-100 text-secondary-600 dark:bg-secondary-700 dark:text-secondary-300'}`}>
+                  {activityOrder.status}
+                </span>
+                <span className={`px-2.5 py-1 rounded-xl text-xs font-semibold
+                  ${activityOrder.orderType === 'DINE_IN'
+                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                    : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                  }`}>
+                  {activityOrder.orderType === 'DINE_IN' ? 'Dine In' : 'Delivery'}
+                </span>
+                {activityOrder.tableNumber && (
+                  <span className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+                    Table {activityOrder.tableNumber}
+                  </span>
+                )}
+              </div>
+
+              {/* Customer */}
+              <div className="card p-4">
+                <p className="text-xs font-semibold text-secondary-500 uppercase tracking-wide mb-2">Customer</p>
+                <p className="font-semibold text-secondary-900 dark:text-white">{activityOrder.customerId?.name || 'Guest'}</p>
+                {activityOrder.customerId?.mobile && (
+                  <p className="text-secondary-400 text-xs mt-0.5">📞 {activityOrder.customerId.mobile}</p>
+                )}
+              </div>
+
+              {/* Delivery address */}
+              {activityOrder.orderType === 'DELIVERY' && activityOrder.address && (
+                <div className="card p-4">
+                  <p className="text-xs font-semibold text-secondary-500 uppercase tracking-wide mb-2">Delivery Address</p>
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-4 h-4 text-secondary-400 shrink-0 mt-0.5" />
+                    <p className="text-secondary-700 dark:text-secondary-300">{activityOrder.address}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Items */}
+              <div className="card p-4">
+                <p className="text-xs font-semibold text-secondary-500 uppercase tracking-wide mb-3">
+                  Items ({activityOrder.totalItems})
+                </p>
+                <div className="space-y-2">
+                  {activityOrder.items.map((item, i) => (
+                    <div key={i} className="flex justify-between items-start gap-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-secondary-900 dark:text-white">
+                          <span className="text-primary-500 font-bold">{item.quantity}×</span> {item.name}
+                        </p>
+                        {item.itemNote && (
+                          <p className="text-xs text-secondary-400 italic">"{item.itemNote}"</p>
+                        )}
+                      </div>
+                      <span className="font-semibold text-secondary-900 dark:text-white shrink-0">
+                        ₹{item.subtotal.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Order note */}
+              {activityOrder.note && (
+                <div className="card p-3">
+                  <p className="text-xs text-secondary-400 italic">📝 "{activityOrder.note}"</p>
+                </div>
+              )}
+
+              {/* Bill summary */}
+              <div className="card p-4 space-y-2">
+                <div className="flex justify-between text-secondary-600 dark:text-secondary-400">
+                  <span>Subtotal</span><span>₹{activityOrder.subtotalAmount.toFixed(2)}</span>
+                </div>
+                {(activityOrder.deliveryCharge ?? 0) > 0 && (
+                  <div className="flex justify-between text-secondary-600 dark:text-secondary-400">
+                    <span>Delivery</span><span>₹{(activityOrder.deliveryCharge ?? 0).toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-base pt-2 border-t border-secondary-200 dark:border-secondary-700 text-secondary-900 dark:text-white">
+                  <span>Total</span><span>₹{activityOrder.totalAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-secondary-500">
+                  <span>Payment</span>
+                  <span className={`font-medium px-2 py-0.5 rounded-full ${
+                    activityOrder.paymentStatus === 'PAID'
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                  }`}>{activityOrder.paymentStatus}</span>
+                </div>
+              </div>
+
+              {/* Timestamps */}
+              <div className="space-y-1 text-xs text-secondary-400">
+                <p>📅 Placed: {new Date(activityOrder.createdAt).toLocaleString('en-IN')}</p>
+                {activityOrder.acceptedAt  && <p>✅ Accepted: {new Date(activityOrder.acceptedAt).toLocaleString('en-IN')}</p>}
+                {activityOrder.completedAt && <p>🏁 Completed: {new Date(activityOrder.completedAt).toLocaleString('en-IN')}</p>}
+              </div>
             </div>
           </Drawer>
         )}
