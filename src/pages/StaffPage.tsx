@@ -4,7 +4,7 @@ import {
   Search, Plus, X, Edit2, UserX, UserCheck, Eye,
   ChefHat, Coffee, User, Shield, Loader2, Clock,
   Activity, AlertTriangle, RefreshCw, Filter,
-  ExternalLink, MapPin,
+  ExternalLink, MapPin, CheckCircle2, XCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import API from '../lib/api';
@@ -14,6 +14,7 @@ import type { Order } from '../types';
 
 type StaffRole   = 'CHEF' | 'WAITER' | 'ASSISTANT';
 type StaffStatus = 'active' | 'blocked';
+type TabType     = 'all' | 'pending' | 'rejected';
 
 interface StaffMember {
   _id: string;
@@ -22,10 +23,12 @@ interface StaffMember {
   mobile: string;
   role: StaffRole;
   isActive: boolean;
-  isEmailVerified: boolean;
+  status: string;
   lastLogin: string | null;
   profileImage: string;
   createdAt: string;
+  rejectionReason?: string;
+  reviewedAt?: string;
 }
 
 interface ActivityEntry {
@@ -42,6 +45,7 @@ interface Summary {
   total: number;
   active: number;
   blocked: number;
+  pending: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -77,10 +81,17 @@ function formatDateTime(dateStr: string): string {
 // ── Main Component ────────────────────────────────────────────────
 
 export default function StaffPage() {
+  // Tab state
+  const [activeTab, setActiveTab] = useState<TabType>('all');
+
   // List state
   const [staff,     setStaff]     = useState<StaffMember[]>([]);
-  const [summary,   setSummary]   = useState<Summary>({ total: 0, active: 0, blocked: 0 });
+  const [pendingRequests, setPendingRequests] = useState<StaffMember[]>([]);
+  const [rejectedRequests, setRejectedRequests] = useState<StaffMember[]>([]);
+  const [summary,   setSummary]   = useState<Summary>({ total: 0, active: 0, blocked: 0, pending: 0 });
   const [loading,   setLoading]   = useState(true);
+  const [pendingLoading, setPendingLoading] = useState(false);
+  const [rejectedLoading, setRejectedLoading] = useState(false);
   const [search,    setSearch]    = useState('');
   const [roleFilter,  setRoleFilter]  = useState<StaffRole | ''>('');
   const [statusFilter, setStatusFilter] = useState<StaffStatus | ''>('');
@@ -94,19 +105,19 @@ export default function StaffPage() {
   const [unblockTarget, setUnblockTarget] = useState<StaffMember | null>(null);
   const [selected,      setSelected]      = useState<StaffMember | null>(null);
 
+  // Approve/Reject
+  const [approveTarget, setApproveTarget] = useState<StaffMember | null>(null);
+  const [rejectTarget,  setRejectTarget]  = useState<StaffMember | null>(null);
+  const [rejectReason,  setRejectReason]  = useState('');
+  const [approving,     setApproving]     = useState(false);
+  const [rejecting,     setRejecting]     = useState(false);
+
   // Forms
   const [addForm,  setAddForm]  = useState({ name:'', email:'', mobile:'', role:'WAITER' as StaffRole, password:'', confirmPassword:'' });
   const [editForm, setEditForm] = useState({ name:'', mobile:'', role:'WAITER' as StaffRole });
   const [saving,   setSaving]   = useState(false);
   const [blocking, setBlocking] = useState(false);
 
-  // Add-staff OTP step
-  const [addStep,        setAddStep]        = useState<'form' | 'otp'>('form');
-  const [pendingStaffId, setPendingStaffId] = useState<string>('');
-  const [pendingEmail,   setPendingEmail]   = useState<string>('');
-  const [emailSent,      setEmailSent]      = useState<boolean>(true);
-  const [otp,            setOtp]            = useState('');
-  const [resending,      setResending]      = useState(false);
   // Activity
   const [activities,      setActivities]      = useState<ActivityEntry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -134,11 +145,43 @@ export default function StaffPage() {
     }
   }, [search, roleFilter, statusFilter]);
 
+  // ── Fetch pending requests ────────────────────────────────────
+  const fetchPending = useCallback(async () => {
+    setPendingLoading(true);
+    try {
+      const res = await API.get('/admin/staff/pending');
+      setPendingRequests(res.data.data || []);
+    } catch {
+      toast.error('Failed to load pending requests');
+    } finally {
+      setPendingLoading(false);
+    }
+  }, []);
+
+  // ── Fetch rejected requests ───────────────────────────────────
+  const fetchRejected = useCallback(async () => {
+    setRejectedLoading(true);
+    try {
+      const res = await API.get('/admin/staff/rejected');
+      setRejectedRequests(res.data.data || []);
+    } catch {
+      toast.error('Failed to load rejected requests');
+    } finally {
+      setRejectedLoading(false);
+    }
+  }, []);
+
   // Debounce search
   useEffect(() => {
     const t = setTimeout(() => fetchStaff(), 350);
     return () => clearTimeout(t);
   }, [search, roleFilter, statusFilter, fetchStaff]);
+
+  // Fetch pending/rejected when switching tabs
+  useEffect(() => {
+    if (activeTab === 'pending') fetchPending();
+    if (activeTab === 'rejected') fetchRejected();
+  }, [activeTab, fetchPending, fetchRejected]);
 
   // ── Fetch activity for selected staff ─────────────────────────
   const fetchActivity = useCallback(async (staffId: string) => {
@@ -157,7 +200,7 @@ export default function StaffPage() {
     if (showActivity && selected) fetchActivity(selected._id);
   }, [showActivity, selected, activityDays, fetchActivity]);
 
-  // ── Add staff — Step 1: create account + send OTP ────────────
+  // ── Add staff (direct creation — immediately active) ──────────
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (addForm.password !== addForm.confirmPassword) {
@@ -166,31 +209,16 @@ export default function StaffPage() {
     }
     setSaving(true);
     try {
-      const res = await API.post('/admin/staff', {
+      await API.post('/admin/staff', {
         name:     addForm.name.trim(),
         email:    addForm.email.trim(),
         mobile:   addForm.mobile.trim(),
         role:     addForm.role,
         password: addForm.password,
       });
-
-      setPendingStaffId(res.data.staffId);
-      setPendingEmail(res.data.email || addForm.email.trim());
-      setEmailSent(res.data.emailSent !== false);
-      setOtp('');
-
-      if (res.data.emailSent === false) {
-        // Account created but email delivery failed — tell admin clearly
-        toast('Staff account created, but the OTP email could not be sent.\nCheck backend terminal and use Resend OTP.', {
-          icon: '⚠️',
-          duration: 8000,
-        });
-      } else {
-        // emailSent === true (or not present in older response format)
-        toast.success('Account created! OTP sent to staff email.');
-      }
-      // Always advance to OTP step — admin can use Resend if email failed
-      setAddStep('otp');
+      toast.success('Staff account created and activated!');
+      closeAddModal();
+      fetchStaff();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to create staff');
     } finally {
@@ -198,44 +226,40 @@ export default function StaffPage() {
     }
   };
 
-  // ── Add staff — Step 2: verify OTP ────────────────────────────
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = otp.replace(/\s/g, '');
-    if (!/^\d{6}$/.test(trimmed)) {
-      toast.error('Please enter the 6-digit OTP');
-      return;
-    }
-    setSaving(true);
+  // ── Approve staff request ─────────────────────────────────────
+  const handleApprove = async () => {
+    if (!approveTarget || approving) return;
+    setApproving(true);
     try {
-      await API.post(`/admin/staff/${pendingStaffId}/verify-otp`, { otp: trimmed });
-      toast.success('Email verified! Staff account is now active.');
-      closeAddModal();
+      await API.patch(`/admin/staff/${approveTarget._id}/approve`);
+      toast.success(`${approveTarget.name} has been approved!`);
+      setApproveTarget(null);
+      fetchPending();
       fetchStaff();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Invalid OTP');
+      toast.error(err?.response?.data?.message || 'Failed to approve');
     } finally {
-      setSaving(false);
+      setApproving(false);
     }
   };
 
-  const handleResendOtp = async () => {
-    if (resending) return;
-    setResending(true);
+  // ── Reject staff request ──────────────────────────────────────
+  const handleReject = async () => {
+    if (!rejectTarget || rejecting) return;
+    setRejecting(true);
     try {
-      const res = await API.post(`/admin/staff/${pendingStaffId}/resend-otp`);
-      if (res.data.emailSent === false) {
-        toast('New OTP generated but email could not be sent.\nCheck backend terminal.', {
-          icon: '⚠️',
-          duration: 8000,
-        });
-      } else {
-        toast.success('New OTP sent to staff email!');
-      }
+      await API.patch(`/admin/staff/${rejectTarget._id}/reject`, {
+        reason: rejectReason.trim() || undefined,
+      });
+      toast.success(`${rejectTarget.name}'s request has been rejected.`);
+      setRejectTarget(null);
+      setRejectReason('');
+      fetchPending();
+      fetchStaff();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to resend OTP');
+      toast.error(err?.response?.data?.message || 'Failed to reject');
     } finally {
-      setResending(false);
+      setRejecting(false);
     }
   };
 
@@ -253,12 +277,8 @@ export default function StaffPage() {
     }
   };
 
-  const closeAddModal = () => {    setShowAddModal(false);
-    setAddStep('form');
-    setOtp('');
-    setEmailSent(true);
-    setPendingStaffId('');
-    setPendingEmail('');
+  const closeAddModal = () => {
+    setShowAddModal(false);
     setAddForm({ name:'', email:'', mobile:'', role:'WAITER', password:'', confirmPassword:'' });
   };
 
@@ -294,7 +314,7 @@ export default function StaffPage() {
       await API.patch(`/admin/staff/${blockTarget._id}/block`);
       toast.success(`${blockTarget.name} has been blocked`);
       setBlockTarget(null);
-      if (selected?._id === blockTarget._id) setSelected(prev => prev ? { ...prev, isActive: false } : prev);
+      if (selected?._id === blockTarget._id) setSelected(prev => prev ? { ...prev, isActive: false, status: 'BLOCKED' } : prev);
       fetchStaff();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to block staff');
@@ -310,7 +330,7 @@ export default function StaffPage() {
       await API.patch(`/admin/staff/${unblockTarget._id}/unblock`);
       toast.success(`${unblockTarget.name} has been unblocked`);
       setUnblockTarget(null);
-      if (selected?._id === unblockTarget._id) setSelected(prev => prev ? { ...prev, isActive: true } : prev);
+      if (selected?._id === unblockTarget._id) setSelected(prev => prev ? { ...prev, isActive: true, status: 'ACTIVE' } : prev);
       fetchStaff();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to unblock staff');
@@ -346,7 +366,7 @@ export default function StaffPage() {
         <div>
           <h1 className="text-2xl font-bold text-secondary-900 dark:text-white">Staff Management</h1>
           <p className="text-secondary-500 dark:text-secondary-400 text-sm">
-            Manage your restaurant staff and monitor activity.
+            Manage your restaurant staff and approve registration requests.
           </p>
         </div>
         <button onClick={() => setShowAddModal(true)} className="btn btn-primary self-start">
@@ -355,279 +375,456 @@ export default function StaffPage() {
       </div>
 
       {/* ── Summary cards ── */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <SummaryCard label="Total Staff"  value={summary.total}   color="text-secondary-900 dark:text-white" />
         <SummaryCard label="Active"       value={summary.active}  color="text-success-600 dark:text-success-400" />
         <SummaryCard label="Blocked"      value={summary.blocked} color="text-danger-600 dark:text-danger-400" />
+        <SummaryCard label="Pending"      value={summary.pending} color="text-amber-600 dark:text-amber-400" />
       </div>
 
-      {/* ── Search + Filters ── */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name, email or mobile…"
-            className="input pl-10 py-2 text-sm"
-          />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-400 hover:text-secondary-600">
-              <X className="w-4 h-4" />
+      {/* ── Tabs ── */}
+      <div className="flex gap-1 p-1 bg-secondary-100 dark:bg-secondary-800 rounded-xl w-fit">
+        {([
+          { key: 'all', label: 'All Staff' },
+          { key: 'pending', label: `Pending${summary.pending > 0 ? ` (${summary.pending})` : ''}` },
+          { key: 'rejected', label: 'Rejected' },
+        ] as { key: TabType; label: string }[]).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all
+              ${activeTab === tab.key
+                ? 'bg-white dark:bg-secondary-700 text-secondary-900 dark:text-white shadow-sm'
+                : 'text-secondary-500 dark:text-secondary-400 hover:text-secondary-700 dark:hover:text-secondary-200'
+              }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ══════════════════════════════════════════════════════════
+          TAB: ALL STAFF
+      ══════════════════════════════════════════════════════════ */}
+      {activeTab === 'all' && (
+        <>
+          {/* ── Search + Filters ── */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-secondary-400" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search by name, email or mobile…"
+                className="input pl-10 py-2 text-sm"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-secondary-400 hover:text-secondary-600">
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            <select
+              value={roleFilter}
+              onChange={e => setRoleFilter(e.target.value as StaffRole | '')}
+              className="input py-2 text-sm max-w-[140px]"
+            >
+              <option value="">All Roles</option>
+              {ROLES.map(r => <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>)}
+            </select>
+
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value as StaffStatus | '')}
+              className="input py-2 text-sm max-w-[140px]"
+            >
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="blocked">Blocked</option>
+            </select>
+
+            <button
+              onClick={fetchStaff}
+              className="btn btn-secondary py-2 text-sm"
+              title="Refresh"
+            >
+              <RefreshCw className="w-4 h-4" />
             </button>
+          </div>
+
+          {/* ── Staff table ── */}
+          {loading ? (
+            <div className="animate-pulse space-y-3">
+              {[...Array(5)].map((_, i) => <div key={i} className="skeleton h-16 rounded-xl" />)}
+            </div>
+          ) : staff.length === 0 ? (
+            <div className="card p-12 text-center">
+              <Shield className="w-12 h-12 mx-auto text-secondary-300 dark:text-secondary-600 mb-3" />
+              <p className="text-secondary-500 dark:text-secondary-400">
+                {search || roleFilter || statusFilter ? 'No staff match your filters.' : 'No staff members yet. Add your first staff member.'}
+              </p>
+            </div>
+          ) : (
+            <div className="card overflow-hidden">
+              {/* Table header */}
+              <div className="hidden sm:grid grid-cols-[1fr_140px_120px_140px_120px] gap-4 px-5 py-3
+                              bg-secondary-50 dark:bg-secondary-700/50 border-b border-secondary-200 dark:border-secondary-700
+                              text-xs font-semibold text-secondary-500 uppercase tracking-wide">
+                <span>Staff Member</span>
+                <span>Role</span>
+                <span>Status</span>
+                <span>Last Login</span>
+                <span className="text-right">Actions</span>
+              </div>
+
+              <div className="divide-y divide-secondary-100 dark:divide-secondary-700">
+                {staff.map(s => (
+                  <motion.div
+                    key={s._id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="grid grid-cols-1 sm:grid-cols-[1fr_140px_120px_140px_120px] gap-3 sm:gap-4
+                               px-5 py-4 items-center hover:bg-secondary-50 dark:hover:bg-secondary-700/30
+                               transition-colors"
+                  >
+                    {/* Staff info */}
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-10 h-10 rounded-full overflow-hidden shrink-0 flex items-center justify-center
+                                       font-bold text-sm
+                                       ${s.isActive
+                                         ? 'bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400'
+                                         : 'bg-secondary-200 text-secondary-500 dark:bg-secondary-700'}`}>
+                        {s.profileImage
+                          ? <img src={s.profileImage} alt={s.name} className="w-full h-full object-cover" />
+                          : s.name.charAt(0).toUpperCase()
+                        }
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-secondary-900 dark:text-white truncate">{s.name}</p>
+                        <p className="text-xs text-secondary-400 truncate">{s.email}</p>
+                      </div>
+                    </div>
+
+                    {/* Role */}
+                    <div><RoleBadge role={s.role} /></div>
+
+                    {/* Status */}
+                    <div>
+                      <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full
+                        ${s.isActive
+                          ? 'bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-400'
+                          : 'bg-danger-100 text-danger-700 dark:bg-danger-900/30 dark:text-danger-400'
+                        }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${s.isActive ? 'bg-success-500' : 'bg-danger-500'}`} />
+                        {s.isActive ? 'Active' : 'Blocked'}
+                      </span>
+                    </div>
+
+                    {/* Last login */}
+                    <div className="text-sm text-secondary-500 dark:text-secondary-400 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      {timeAgo(s.lastLogin)}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => { setSelected(s); setShowProfile(true); }}
+                        className="p-2 rounded-lg hover:bg-secondary-100 dark:hover:bg-secondary-700 text-secondary-500 transition-colors"
+                        title="View Profile"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => { setSelected(s); setShowActivity(true); }}
+                        className="p-2 rounded-lg hover:bg-secondary-100 dark:hover:bg-secondary-700 text-secondary-500 transition-colors"
+                        title="View Activity"
+                      >
+                        <Activity className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => openEdit(s)}
+                        className="p-2 rounded-lg hover:bg-secondary-100 dark:hover:bg-secondary-700 text-secondary-500 transition-colors"
+                        title="Edit"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      {s.isActive ? (
+                        <button
+                          onClick={() => setBlockTarget(s)}
+                          className="p-2 rounded-lg hover:bg-danger-50 dark:hover:bg-danger-900/20 text-danger-500 transition-colors"
+                          title="Block"
+                        >
+                          <UserX className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setUnblockTarget(s)}
+                          className="p-2 rounded-lg hover:bg-success-50 dark:hover:bg-success-900/20 text-success-600 transition-colors"
+                          title="Unblock"
+                        >
+                          <UserCheck className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
           )}
-        </div>
-
-        <select
-          value={roleFilter}
-          onChange={e => setRoleFilter(e.target.value as StaffRole | '')}
-          className="input py-2 text-sm max-w-[140px]"
-        >
-          <option value="">All Roles</option>
-          {ROLES.map(r => <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>)}
-        </select>
-
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value as StaffStatus | '')}
-          className="input py-2 text-sm max-w-[140px]"
-        >
-          <option value="">All Status</option>
-          <option value="active">Active</option>
-          <option value="blocked">Blocked</option>
-        </select>
-
-        <button
-          onClick={fetchStaff}
-          className="btn btn-secondary py-2 text-sm"
-          title="Refresh"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* ── Staff table ── */}
-      {loading ? (
-        <div className="animate-pulse space-y-3">
-          {[...Array(5)].map((_, i) => <div key={i} className="skeleton h-16 rounded-xl" />)}
-        </div>
-      ) : staff.length === 0 ? (
-        <div className="card p-12 text-center">
-          <Shield className="w-12 h-12 mx-auto text-secondary-300 dark:text-secondary-600 mb-3" />
-          <p className="text-secondary-500 dark:text-secondary-400">
-            {search || roleFilter || statusFilter ? 'No staff match your filters.' : 'No staff members yet. Add your first staff member.'}
-          </p>
-        </div>
-      ) : (
-        <div className="card overflow-hidden">
-          {/* Table header */}
-          <div className="hidden sm:grid grid-cols-[1fr_140px_120px_140px_120px] gap-4 px-5 py-3
-                          bg-secondary-50 dark:bg-secondary-700/50 border-b border-secondary-200 dark:border-secondary-700
-                          text-xs font-semibold text-secondary-500 uppercase tracking-wide">
-            <span>Staff Member</span>
-            <span>Role</span>
-            <span>Status</span>
-            <span>Last Login</span>
-            <span className="text-right">Actions</span>
-          </div>
-
-          <div className="divide-y divide-secondary-100 dark:divide-secondary-700">
-            {staff.map(s => (
-              <motion.div
-                key={s._id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="grid grid-cols-1 sm:grid-cols-[1fr_140px_120px_140px_120px] gap-3 sm:gap-4
-                           px-5 py-4 items-center hover:bg-secondary-50 dark:hover:bg-secondary-700/30
-                           transition-colors"
-              >
-                {/* Staff info */}
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-10 h-10 rounded-full overflow-hidden shrink-0 flex items-center justify-center
-                                   font-bold text-sm
-                                   ${s.isActive
-                                     ? 'bg-primary-100 text-primary-600 dark:bg-primary-900/30 dark:text-primary-400'
-                                     : 'bg-secondary-200 text-secondary-500 dark:bg-secondary-700'}`}>
-                    {s.profileImage
-                      ? <img src={s.profileImage} alt={s.name} className="w-full h-full object-cover" />
-                      : s.name.charAt(0).toUpperCase()
-                    }
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-secondary-900 dark:text-white truncate">{s.name}</p>
-                    <p className="text-xs text-secondary-400 truncate">{s.email}</p>
-                  </div>
-                </div>
-
-                {/* Role */}
-                <div><RoleBadge role={s.role} /></div>
-
-                {/* Status */}
-                <div>
-                  <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full
-                    ${s.isActive
-                      ? 'bg-success-100 text-success-700 dark:bg-success-900/30 dark:text-success-400'
-                      : 'bg-danger-100 text-danger-700 dark:bg-danger-900/30 dark:text-danger-400'
-                    }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${s.isActive ? 'bg-success-500' : 'bg-danger-500'}`} />
-                    {s.isActive ? 'Active' : 'Blocked'}
-                  </span>
-                </div>
-
-                {/* Last login */}
-                <div className="text-sm text-secondary-500 dark:text-secondary-400 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 shrink-0" />
-                  {timeAgo(s.lastLogin)}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center justify-end gap-1">
-                  <button
-                    onClick={() => { setSelected(s); setShowProfile(true); }}
-                    className="p-2 rounded-lg hover:bg-secondary-100 dark:hover:bg-secondary-700 text-secondary-500 transition-colors"
-                    title="View Profile"
-                  >
-                    <Eye className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => { setSelected(s); setShowActivity(true); }}
-                    className="p-2 rounded-lg hover:bg-secondary-100 dark:hover:bg-secondary-700 text-secondary-500 transition-colors"
-                    title="View Activity"
-                  >
-                    <Activity className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => openEdit(s)}
-                    className="p-2 rounded-lg hover:bg-secondary-100 dark:hover:bg-secondary-700 text-secondary-500 transition-colors"
-                    title="Edit"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  {s.isActive ? (
-                    <button
-                      onClick={() => setBlockTarget(s)}
-                      className="p-2 rounded-lg hover:bg-danger-50 dark:hover:bg-danger-900/20 text-danger-500 transition-colors"
-                      title="Block"
-                    >
-                      <UserX className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setUnblockTarget(s)}
-                      className="p-2 rounded-lg hover:bg-success-50 dark:hover:bg-success-900/20 text-success-600 transition-colors"
-                      title="Unblock"
-                    >
-                      <UserCheck className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
+        </>
       )}
 
       {/* ══════════════════════════════════════════════════════════
-          ADD STAFF MODAL  (2-step: form → OTP)
+          TAB: PENDING REQUESTS
+      ══════════════════════════════════════════════════════════ */}
+      {activeTab === 'pending' && (
+        <>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-secondary-500 dark:text-secondary-400">
+              Staff registration requests awaiting your approval.
+            </p>
+            <button onClick={fetchPending} className="btn btn-secondary py-2 text-sm" title="Refresh">
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+
+          {pendingLoading ? (
+            <div className="animate-pulse space-y-3">
+              {[...Array(3)].map((_, i) => <div key={i} className="skeleton h-28 rounded-xl" />)}
+            </div>
+          ) : pendingRequests.length === 0 ? (
+            <div className="card p-12 text-center">
+              <CheckCircle2 className="w-12 h-12 mx-auto text-secondary-300 dark:text-secondary-600 mb-3" />
+              <p className="text-secondary-500 dark:text-secondary-400">No pending staff requests.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingRequests.map(req => (
+                <motion.div
+                  key={req._id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="card p-5"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    {/* Info */}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className="w-11 h-11 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center font-bold text-amber-700 dark:text-amber-400 shrink-0">
+                        {req.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-secondary-900 dark:text-white truncate">{req.name}</p>
+                        <p className="text-xs text-secondary-400 truncate">{req.email}</p>
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                          <RoleBadge role={req.role} />
+                          <span className="text-xs text-secondary-400">{req.mobile}</span>
+                          <span className="text-xs text-secondary-400">
+                            Requested: {formatDateTime(req.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => setRejectTarget(req)}
+                        className="btn btn-secondary text-sm px-4 py-2 text-danger-600 dark:text-danger-400 border-danger-200 dark:border-danger-800 hover:bg-danger-50 dark:hover:bg-danger-900/20"
+                      >
+                        <XCircle className="w-4 h-4" /> Reject
+                      </button>
+                      <button
+                        onClick={() => setApproveTarget(req)}
+                        className="btn btn-primary text-sm px-4 py-2"
+                      >
+                        <CheckCircle2 className="w-4 h-4" /> Approve
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          TAB: REJECTED REQUESTS
+      ══════════════════════════════════════════════════════════ */}
+      {activeTab === 'rejected' && (
+        <>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-secondary-500 dark:text-secondary-400">
+              Previously rejected registration requests.
+            </p>
+            <button onClick={fetchRejected} className="btn btn-secondary py-2 text-sm" title="Refresh">
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+
+          {rejectedLoading ? (
+            <div className="animate-pulse space-y-3">
+              {[...Array(3)].map((_, i) => <div key={i} className="skeleton h-24 rounded-xl" />)}
+            </div>
+          ) : rejectedRequests.length === 0 ? (
+            <div className="card p-12 text-center">
+              <XCircle className="w-12 h-12 mx-auto text-secondary-300 dark:text-secondary-600 mb-3" />
+              <p className="text-secondary-500 dark:text-secondary-400">No rejected requests.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {rejectedRequests.map(req => (
+                <div key={req._id} className="card p-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center font-bold text-danger-700 dark:text-danger-400 shrink-0">
+                      {req.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-secondary-900 dark:text-white truncate">{req.name}</p>
+                      <p className="text-xs text-secondary-400 truncate">{req.email} • {req.mobile}</p>
+                      <div className="flex items-center gap-3 mt-1 flex-wrap">
+                        <RoleBadge role={req.role} />
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-danger-100 text-danger-700 dark:bg-danger-900/30 dark:text-danger-400">
+                          Rejected
+                        </span>
+                        {req.reviewedAt && (
+                          <span className="text-xs text-secondary-400">
+                            {formatDateTime(req.reviewedAt)}
+                          </span>
+                        )}
+                      </div>
+                      {req.rejectionReason && (
+                        <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-2 italic">
+                          Reason: {req.rejectionReason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          APPROVE CONFIRMATION
+      ══════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {approveTarget && (
+          <Modal onClose={() => !approving && setApproveTarget(null)} title="Approve Staff Request" maxW="max-w-sm">
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-success-100 dark:bg-success-900/30 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-5 h-5 text-success-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-secondary-900 dark:text-white">Approve {approveTarget.name}?</p>
+                  <p className="text-sm text-secondary-500 dark:text-secondary-400 mt-1">
+                    This will activate the staff account and allow them to log in.
+                  </p>
+                </div>
+              </div>
+
+              <div className="card p-3 space-y-1 text-sm">
+                <InfoRow label="Name"  value={approveTarget.name} />
+                <InfoRow label="Email" value={approveTarget.email} />
+                <InfoRow label="Role"  value={approveTarget.role} />
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setApproveTarget(null)} disabled={approving} className="btn btn-secondary flex-1">Cancel</button>
+                <button onClick={handleApprove} disabled={approving} className="btn btn-primary flex-1">
+                  {approving ? <><Loader2 className="w-4 h-4 animate-spin" /> Approving…</> : <><CheckCircle2 className="w-4 h-4" /> Approve</>}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+
+      {/* ══════════════════════════════════════════════════════════
+          REJECT CONFIRMATION
+      ══════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {rejectTarget && (
+          <Modal onClose={() => !rejecting && setRejectTarget(null)} title="Reject Staff Request" maxW="max-w-sm">
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-danger-100 dark:bg-danger-900/30 flex items-center justify-center shrink-0">
+                  <XCircle className="w-5 h-5 text-danger-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-secondary-900 dark:text-white">Reject {rejectTarget.name}?</p>
+                  <p className="text-sm text-secondary-500 dark:text-secondary-400 mt-1">
+                    This person will not be able to log in.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Rejection Reason (optional)</label>
+                <textarea
+                  className="input min-h-[80px] resize-none"
+                  placeholder="e.g., We are not currently hiring."
+                  value={rejectReason}
+                  onChange={e => setRejectReason(e.target.value)}
+                  maxLength={500}
+                  disabled={rejecting}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => { setRejectTarget(null); setRejectReason(''); }} disabled={rejecting} className="btn btn-secondary flex-1">Cancel</button>
+                <button onClick={handleReject} disabled={rejecting} className="btn btn-danger flex-1">
+                  {rejecting ? <><Loader2 className="w-4 h-4 animate-spin" /> Rejecting…</> : <><XCircle className="w-4 h-4" /> Reject Request</>}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </AnimatePresence>
+
+      {/* ══════════════════════════════════════════════════════════
+          ADD STAFF MODAL (direct creation — no OTP)
       ══════════════════════════════════════════════════════════ */}
       <AnimatePresence>
         {showAddModal && (
-          <Modal
-            onClose={closeAddModal}
-            title={addStep === 'form' ? 'Add Staff Member' : 'Verify Email'}
-          >
-            {addStep === 'form' ? (
-              <form onSubmit={handleAdd} className="space-y-4">
-                <Field label="Full Name *">
-                  <input className="input" value={addForm.name} onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g., Rahul Sharma" required />
-                </Field>
-                <Field label="Email *">
-                  <input className="input" type="email" value={addForm.email} onChange={e => setAddForm(p => ({ ...p, email: e.target.value }))} placeholder="staff@example.com" required />
-                </Field>
-                <Field label="Mobile">
-                  <input className="input" type="tel" value={addForm.mobile} onChange={e => setAddForm(p => ({ ...p, mobile: e.target.value }))} placeholder="+91 9876543210" />
-                </Field>
-                <Field label="Role *">
-                  <select className="input" value={addForm.role} onChange={e => setAddForm(p => ({ ...p, role: e.target.value as StaffRole }))} required>
-                    {ROLES.map(r => <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>)}
-                  </select>
-                </Field>
-                <Field label="Password *">
-                  <input className="input" type="password" value={addForm.password} onChange={e => setAddForm(p => ({ ...p, password: e.target.value }))} placeholder="Min. 6 characters" required />
-                </Field>
-                <Field label="Confirm Password *">
-                  <input className="input" type="password" value={addForm.confirmPassword} onChange={e => setAddForm(p => ({ ...p, confirmPassword: e.target.value }))} placeholder="Repeat password" required />
-                </Field>
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={closeAddModal} className="btn btn-secondary flex-1">Cancel</button>
-                  <button type="submit" disabled={saving} className="btn btn-primary flex-1">
-                    {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating…</> : 'Create & Send OTP'}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              /* ── OTP verification step ── */
-              <form onSubmit={handleVerifyOtp} className="space-y-5">
-                {/* Email delivery status banner */}
-                {!emailSent ? (
-                  <div className="flex items-start gap-2 p-3 rounded-xl
-                                  bg-warning-50 dark:bg-warning-900/20
-                                  border border-warning-200 dark:border-warning-800">
-                    <AlertTriangle className="w-4 h-4 text-warning-600 dark:text-warning-400 shrink-0 mt-0.5" />
-                    <div className="text-sm text-warning-700 dark:text-warning-300">
-                      <p className="font-semibold">OTP email could not be sent.</p>
-                      <p className="mt-0.5">Check the backend terminal for the OTP code, or use the Resend button below after fixing the email configuration.</p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm text-secondary-600 dark:text-secondary-300 text-center">
-                    A 6-digit OTP has been sent to{' '}
-                    <strong className="text-secondary-900 dark:text-white">{pendingEmail}</strong>.
-                    Enter it below to activate the staff account.
-                  </p>
-                )}
-
-                <Field label="OTP Code">
-                  <input
-                    className="input text-center text-2xl font-mono tracking-[0.4em]"
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={6}
-                    placeholder="• • • • • •"
-                    value={otp}
-                    onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    autoFocus
-                  />
-                </Field>
-
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => { setAddStep('form'); setOtp(''); }}
-                    className="btn btn-secondary flex-1"
-                  >
-                    ← Back
-                  </button>
-                  <button type="submit" disabled={saving || otp.length !== 6} className="btn btn-primary flex-1">
-                    {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</> : 'Verify & Activate'}
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-between text-xs text-secondary-500">
-                  <span>Didn't receive it?</span>
-                  <button
-                    type="button"
-                    onClick={handleResendOtp}
-                    disabled={resending}
-                    className="text-primary-600 dark:text-primary-400 hover:underline disabled:opacity-50 flex items-center gap-1"
-                  >
-                    {resending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                    Resend OTP
-                  </button>
-                </div>
-              </form>
-            )}
+          <Modal onClose={closeAddModal} title="Add Staff Member">
+            <form onSubmit={handleAdd} className="space-y-4">
+              <Field label="Full Name *">
+                <input className="input" value={addForm.name} onChange={e => setAddForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g., Rahul Sharma" required />
+              </Field>
+              <Field label="Email *">
+                <input className="input" type="email" value={addForm.email} onChange={e => setAddForm(p => ({ ...p, email: e.target.value }))} placeholder="staff@example.com" required />
+              </Field>
+              <Field label="Mobile">
+                <input className="input" type="tel" value={addForm.mobile} onChange={e => setAddForm(p => ({ ...p, mobile: e.target.value }))} placeholder="+91 9876543210" />
+              </Field>
+              <Field label="Role *">
+                <select className="input" value={addForm.role} onChange={e => setAddForm(p => ({ ...p, role: e.target.value as StaffRole }))} required>
+                  {ROLES.map(r => <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>)}
+                </select>
+              </Field>
+              <Field label="Password *">
+                <input className="input" type="password" value={addForm.password} onChange={e => setAddForm(p => ({ ...p, password: e.target.value }))} placeholder="Min. 6 characters" required />
+              </Field>
+              <Field label="Confirm Password *">
+                <input className="input" type="password" value={addForm.confirmPassword} onChange={e => setAddForm(p => ({ ...p, confirmPassword: e.target.value }))} placeholder="Repeat password" required />
+              </Field>
+              <p className="text-xs text-secondary-400">
+                Staff created here will be immediately active — no approval needed.
+              </p>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={closeAddModal} className="btn btn-secondary flex-1">Cancel</button>
+                <button type="submit" disabled={saving} className="btn btn-primary flex-1">
+                  {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating…</> : 'Create Staff'}
+                </button>
+              </div>
+            </form>
           </Modal>
         )}
       </AnimatePresence>
@@ -650,7 +847,7 @@ export default function StaffPage() {
                   {ROLES.map(r => <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>)}
                 </select>
               </Field>
-              <p className="text-xs text-secondary-400">Email cannot be changed. To reset password, the staff member should use the forgot-password flow.</p>
+              <p className="text-xs text-secondary-400">Email cannot be changed.</p>
               <div className="flex gap-3 pt-2">
                 <button type="button" onClick={() => setShowEditModal(false)} className="btn btn-secondary flex-1">Cancel</button>
                 <button type="submit" disabled={saving} className="btn btn-primary flex-1">
@@ -746,7 +943,6 @@ export default function StaffPage() {
                 <InfoRow label="Mobile"     value={selected.mobile || '—'} />
                 <InfoRow label="Joined"     value={formatDateTime(selected.createdAt)} />
                 <InfoRow label="Last Login" value={selected.lastLogin ? formatDateTime(selected.lastLogin) : 'Never'} />
-                <InfoRow label="Email Verified" value={selected.isEmailVerified ? 'Yes' : 'No'} />
               </div>
 
               {/* Actions */}
@@ -860,8 +1056,6 @@ export default function StaffPage() {
                                       {a.entityType}
                                     </span>
 
-                                    {/* Clickable "Open Order" when entityId is available */}
-                                    {/* View Order — only shown when entityId is a valid MongoDB ObjectId */}
                                     {isOrder && a.entityId &&
                                      typeof a.entityId === 'string' &&
                                      /^[a-f\d]{24}$/i.test(a.entityId) && (() => {
