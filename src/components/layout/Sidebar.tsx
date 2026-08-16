@@ -15,6 +15,7 @@ import {
   Receipt,
   Table2,
   UserCog,
+  QrCode,
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -35,6 +36,7 @@ const menuItems = [
   { path: '/billing',   label: 'Billing',   icon: Receipt        },
   { path: '/tables',    label: 'Tables',    icon: Table2         },
   { path: '/staff',     label: 'Staff',     icon: UserCog        },
+  { path: '/qr-codes', label: 'QR Codes',  icon: QrCode         },
   { path: '/settings',  label: 'Settings',  icon: Settings       },
 ];
 

@@ -17,6 +17,7 @@ import { SettingsPage } from './pages/SettingsPage';
 import BillingPage from './pages/BillingPage';
 import TablesPage from './pages/TablesPage';
 import StaffPage from './pages/StaffPage';
+import QRCodesPage from './pages/QRCodesPage';
 
 function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -49,6 +50,7 @@ function AppRoutes() {
         <Route path="/billing"    element={<BillingPage />} />
         <Route path="/tables"     element={<TablesPage />} />
         <Route path="/staff"      element={<StaffPage />} />
+        <Route path="/qr-codes"   element={<QRCodesPage />} />
         <Route path="/settings"   element={<SettingsPage />} />
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Route>
