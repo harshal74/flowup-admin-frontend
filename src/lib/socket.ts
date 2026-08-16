@@ -2,13 +2,13 @@ import { io, Socket } from "socket.io-client";
 
 // Read from env — change only .env to switch environments
 export const RESTAURANT_ID =
-  (import.meta.env.VITE_RESTAURANT_ID as string) || "FLOWUP001";
+  (import.meta.env.VITE_RESTAURANT_ID as string) || "";
 
 const SOCKET_URL =
   import.meta.env.VITE_SOCKET_URL ||
   (import.meta.env.VITE_API_URL
     ? (import.meta.env.VITE_API_URL as string).replace(/\/api\/?$/, "")
-    : "https://flowup-backend-1.onrender.com");
+    : "");
 
 const socket: Socket = io(SOCKET_URL, {
   autoConnect: false,
@@ -16,6 +16,11 @@ const socket: Socket = io(SOCKET_URL, {
   reconnectionAttempts: 10,
   reconnectionDelay: 2000,
   query: { restaurantId: RESTAURANT_ID },
+  auth: {
+    get token() {
+      return localStorage.getItem("flowup_admin_token") || "";
+    },
+  },
 });
 
 export function connectSocket(): void {
