@@ -51,9 +51,20 @@ export function RestaurantProvider({
         const response =
           await API.get("/settings");
 
-        setRestaurant(
-          response.data.data
-        );
+        const data = response.data.data;
+        setRestaurant(data);
+
+        // Update browser tab title and favicon from restaurant settings
+        if (data?.restaurantName) {
+          document.title = `${data.restaurantName} — Admin`;
+        }
+        if (data?.restaurantLogo) {
+          const link: HTMLLinkElement =
+            document.querySelector("link[rel~='icon']") || document.createElement('link');
+          link.rel = 'icon';
+          link.href = data.restaurantLogo;
+          document.head.appendChild(link);
+        }
       } catch (error) {
         console.error(
           "Error fetching settings:",
