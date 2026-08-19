@@ -62,14 +62,24 @@ function buildTableList(
     if (!o.tableNumber) return;
     const t = o.tableNumber;
 
+    // Occupied: any active order OR completed but not yet billed/paid
     if (ACTIVE_ORDER_STATUSES.includes(o.status)) {
       if (tableMap.get(t) === 'Available') {
         tableMap.set(t, 'Occupied');
       }
     }
+
+    // Completed but no bill generated yet — still occupied (waiting for admin to bill)
+    if (o.status === 'COMPLETED' && o.paymentStatus === 'PENDING' && !o.billId) {
+      if (tableMap.get(t) === 'Available') {
+        tableMap.set(t, 'Occupied');
+      }
+    }
+
+    // Bill Requested: bill generated (awaiting payment) OR payment failed
     if (
-      (o.status === 'READY' || o.status === 'COMPLETED') &&
-      o.paymentStatus === 'PENDING'
+      o.status === 'COMPLETED' &&
+      ((o.billId && o.paymentStatus === 'PENDING') || o.paymentStatus === 'FAILED')
     ) {
       tableMap.set(t, 'Bill Requested');
     }
@@ -120,9 +130,16 @@ export default function TablesPage() {
 
   // ── Socket listeners — same events waiter TablesPage uses ──────
   useEffect(() => {
-    const onOrderUpdate = (p: { orderId: string; status: string }) =>
+    const onOrderUpdate = (p: { orderId: string; status: string; paymentStatus?: string; billId?: string }) =>
       setOrders(prev => prev.map(o =>
-        o._id === p.orderId ? { ...o, status: p.status as any } : o
+        o._id === p.orderId
+          ? {
+              ...o,
+              status: p.status as any,
+              ...(p.paymentStatus ? { paymentStatus: p.paymentStatus } : {}),
+              ...(p.billId !== undefined ? { billId: p.billId } : {}),
+            }
+          : o
       ));
 
     const onNewOrder = (order: Order) =>
