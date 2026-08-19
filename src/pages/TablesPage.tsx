@@ -44,9 +44,18 @@ const STATUS_STYLE: Record<TableStatus, { bg: string; text: string; border: stri
   'Waiter Requested':{ bg: 'bg-red-500/10',    text: 'text-red-400',    border: 'border-red-500/40',    label: 'Waiter Called'   },
 };
 
-const ACTIVE_ORDER_STATUSES = ['PENDING', 'ACCEPTED', 'PREPARING', 'READY'];
+const ACTIVE_ORDER_STATUSES = ['PENDING', 'ACCEPTED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY'];
 
-// ── Derive table state from live data — identical algorithm to waiter ──
+// Only consider orders from today for table status (stale old orders should not affect tables)
+function isToday(dateStr: string): boolean {
+  const d = new Date(dateStr);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() &&
+         d.getMonth() === now.getMonth() &&
+         d.getDate() === now.getDate();
+}
+
+// ── Derive table state from live data ─────────────────────────────
 
 function buildTableList(
   totalTables: number,
@@ -59,26 +68,29 @@ function buildTableList(
   }
 
   orders.forEach(o => {
+    // Skip: no table, delivery orders, or already paid orders
     if (!o.tableNumber) return;
+    if (o.orderType === 'DELIVERY') return;
+    if (o.paymentStatus === 'PAID') return;
     const t = o.tableNumber;
 
-    // Occupied: any active order OR completed but not yet billed/paid
+    // Occupied: any active in-progress order
     if (ACTIVE_ORDER_STATUSES.includes(o.status)) {
       if (tableMap.get(t) === 'Available') {
         tableMap.set(t, 'Occupied');
       }
     }
 
-    // Completed but no bill generated yet — still occupied (waiting for admin to bill)
-    if (o.status === 'COMPLETED' && o.paymentStatus === 'PENDING' && !o.billId) {
+    // Completed but no bill generated yet — still occupied (today's orders only)
+    if (o.status === 'COMPLETED' && o.paymentStatus === 'PENDING' && !o.billId && isToday(o.createdAt)) {
       if (tableMap.get(t) === 'Available') {
         tableMap.set(t, 'Occupied');
       }
     }
 
-    // Bill Requested: bill generated (awaiting payment) OR payment failed
+    // Bill Requested: bill generated (awaiting payment) OR payment failed (today only)
     if (
-      o.status === 'COMPLETED' &&
+      o.status === 'COMPLETED' && isToday(o.createdAt) &&
       ((o.billId && o.paymentStatus === 'PENDING') || o.paymentStatus === 'FAILED')
     ) {
       tableMap.set(t, 'Bill Requested');
