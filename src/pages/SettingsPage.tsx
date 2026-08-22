@@ -28,6 +28,7 @@ export function SettingsPage() {
     currency: 'INR',
     upiId: '',
     totalTables: 10,
+    deliveryPaymentMode: 'COD',
   });
 
   const [isSaving,         setIsSaving]         = useState(false);
@@ -53,6 +54,7 @@ export function SettingsPage() {
         currency:               restaurant.currency               || 'INR',
         upiId:                  restaurant.upiId                  || '',
         totalTables:            restaurant.totalTables            ?? 10,
+        deliveryPaymentMode:    (restaurant as any).deliveryPaymentMode || 'COD',
       });
       setTableError('');
       setTableWarning('');
@@ -339,6 +341,26 @@ export function SettingsPage() {
                   className="input pl-12" placeholder="0"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="label">Delivery Payment Mode</label>
+              <select
+                value={(formData as any).deliveryPaymentMode || 'COD'}
+                onChange={(e) => set('deliveryPaymentMode' as any, e.target.value)}
+                className="input"
+              >
+                <option value="COD">Cash on Delivery</option>
+                <option value="PAYMENT_FIRST">Payment First (Online)</option>
+                <option value="BOTH">Both (Customer Chooses)</option>
+              </select>
+              <p className="text-xs text-secondary-400 mt-1">
+                {(formData as any).deliveryPaymentMode === 'PAYMENT_FIRST'
+                  ? 'Customers must pay online before the order is sent to you.'
+                  : (formData as any).deliveryPaymentMode === 'BOTH'
+                  ? 'Customers can choose between online payment or cash on delivery.'
+                  : 'Customers pay when the delivery arrives.'}
+              </p>
             </div>
 
             <div>
