@@ -64,7 +64,7 @@ export default function BillingPage() {
   const [discount,       setDiscount]       = useState(0);
   const [paymentMethod,  setPaymentMethod]  = useState("Cash");
 
-  // BUG M FIX: wrap in useCallback so the debounce effect always has a fresh reference
+  // BUG M  FIX: wrap in useCallback so the debounce effect always has a fresh reference
   const fetchOrders = useCallback(async () => {
     try {
       setLoading(true);
