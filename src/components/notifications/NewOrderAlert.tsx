@@ -83,8 +83,45 @@ export function NewOrderAlert() {
                     </div>
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-100 dark:bg-primary-900/30">
                       <ShoppingBag className="w-4 h-4 text-primary-500" />
-                      <span className="text-sm font-medium text-primary-700 dark:text-primary-300">{currentOrder.orderType}</span>
+                      <span className="text-sm font-medium text-primary-700 dark:text-primary-300">{currentOrder.orderType === 'DINE_IN' ? 'Dine In' : 'Delivery'}</span>
                     </div>
+                    {/* Payment badge */}
+                    {currentOrder.paymentMethod === 'ONLINE' && currentOrder.paymentStatus === 'PAID' && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-success-100 dark:bg-success-900/30">
+                        <span className="text-sm">💳</span>
+                        <span className="text-sm font-medium text-success-700 dark:text-success-300">PAID ONLINE</span>
+                      </div>
+                    )}
+                    {currentOrder.paymentMethod === 'ONLINE' && currentOrder.paymentStatus === 'REFUNDED' && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-danger-100 dark:bg-danger-900/30">
+                        <span className="text-sm">↩</span>
+                        <span className="text-sm font-medium text-danger-700 dark:text-danger-300">REFUNDED</span>
+                      </div>
+                    )}
+                    {currentOrder.paymentMethod === 'ONLINE' && currentOrder.paymentStatus === 'FAILED' && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-danger-100 dark:bg-danger-900/30">
+                        <span className="text-sm">⚠</span>
+                        <span className="text-sm font-medium text-danger-700 dark:text-danger-300">PAYMENT FAILED</span>
+                      </div>
+                    )}
+                    {currentOrder.paymentMethod === 'COD' && currentOrder.paymentStatus === 'PENDING' && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-warning-100 dark:bg-warning-900/30">
+                        <span className="text-sm">💵</span>
+                        <span className="text-sm font-medium text-warning-700 dark:text-warning-300">CASH ON DELIVERY</span>
+                      </div>
+                    )}
+                    {currentOrder.paymentMethod === 'COD' && currentOrder.paymentStatus === 'PAID' && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-success-100 dark:bg-success-900/30">
+                        <span className="text-sm">✓</span>
+                        <span className="text-sm font-medium text-success-700 dark:text-success-300">PAID</span>
+                      </div>
+                    )}
+                    {!currentOrder.paymentMethod && currentOrder.orderType === 'DINE_IN' && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary-100 dark:bg-secondary-700">
+                        <span className="text-sm">💵</span>
+                        <span className="text-sm font-medium text-secondary-700 dark:text-secondary-300">PAY AT COUNTER</span>
+                      </div>
+                    )}
                     {currentOrder.tableNumber && (
                       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-success-100 dark:bg-success-900/30">
                         <MapPin className="w-4 h-4 text-success-500" />

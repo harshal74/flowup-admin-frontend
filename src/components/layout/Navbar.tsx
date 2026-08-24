@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Menu, Bell, Sun, Moon, User, LogOut, Settings,
@@ -16,6 +17,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
   const { user, logout }       = useAuth();
   const { isDark, toggleTheme } = useTheme();
   const { restaurant }          = useRestaurant();
+  const navigate = useNavigate();
   const {
     unreadCount,
     isRinging,
@@ -290,10 +292,10 @@ export function Navbar({ onMenuClick }: NavbarProps) {
                     className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-secondary-800 rounded-xl shadow-xl border border-secondary-200 dark:border-secondary-700 overflow-hidden"
                   >
                     <div className="p-2">
-                      <button onClick={() => setShowProfile(false)} className="sidebar-link w-full">
+                      <button onClick={() => { setShowProfile(false); navigate('/profile'); }} className="sidebar-link w-full">
                         <User className="w-4 h-4" /> <span>Profile</span>
                       </button>
-                      <button onClick={() => setShowProfile(false)} className="sidebar-link w-full">
+                      <button onClick={() => { setShowProfile(false); navigate('/settings'); }} className="sidebar-link w-full">
                         <Settings className="w-4 h-4" /> <span>Settings</span>
                       </button>
                       <div className="border-t border-secondary-200 dark:border-secondary-700 my-2" />

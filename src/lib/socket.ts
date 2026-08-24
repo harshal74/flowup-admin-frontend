@@ -1,8 +1,16 @@
 import { io, Socket } from "socket.io-client";
 
-// Read from env — change only .env to switch environments
-export const RESTAURANT_ID =
-  (import.meta.env.VITE_RESTAURANT_ID as string) || "";
+// Derive restaurantId from the stored Admin JWT (trusted source)
+function getRestaurantIdFromToken(): string {
+  try {
+    const token = localStorage.getItem("flowup_admin_token");
+    if (!token) return "";
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return payload.restaurantId || "";
+  } catch {
+    return "";
+  }
+}
 
 const SOCKET_URL =
   import.meta.env.VITE_SOCKET_URL ||
@@ -15,7 +23,7 @@ const socket: Socket = io(SOCKET_URL, {
   reconnection: true,
   reconnectionAttempts: 10,
   reconnectionDelay: 2000,
-  query: { restaurantId: RESTAURANT_ID },
+  query: { get restaurantId() { return getRestaurantIdFromToken(); } },
   auth: {
     get token() {
       return localStorage.getItem("flowup_admin_token") || "";

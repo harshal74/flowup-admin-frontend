@@ -11,7 +11,3 @@ API.interceptors.request.use((config) => {
 });
 
 export default API;
-
-// Read from env — change only .env to switch environments
-export const RESTAURANT_ID =
-  (import.meta.env.VITE_RESTAURANT_ID as string) || "";

@@ -471,6 +471,47 @@ export function SettingsPage() {
           </button>
         </div>
       </motion.div>
+
+      {/* ── Login Links ── */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="card p-6 max-w-4xl">
+        <h2 className="text-lg font-semibold text-secondary-900 dark:text-white mb-2">Login Links</h2>
+        <p className="text-sm text-secondary-500 dark:text-secondary-400 mb-4">Share these links with your staff and customers to give them quick access to FlowUp.</p>
+        <div className="space-y-4">
+          <LoginLinkCard
+            label="Staff / Waiter Login"
+            url={`${(import.meta.env.VITE_WAITER_URL as string) || 'http://localhost:5176'}/login`}
+          />
+          <LoginLinkCard
+            label="Customer Ordering"
+            url={(restaurant as any)?.restaurantSlug
+              ? `${(import.meta.env.VITE_CUSTOMER_URL as string) || 'http://localhost:5174'}/restaurant/${(restaurant as any).restaurantSlug}`
+              : `${(import.meta.env.VITE_CUSTOMER_URL as string) || 'http://localhost:5174'}/?restaurant=${restaurant?.restaurantId || ''}`
+            }
+          />
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function LoginLinkCard({ label, url }: { label: string; url: string }) {
+  const handleCopy = () => {
+    navigator.clipboard.writeText(url).then(() => {
+      toast.success(`${label} link copied`);
+    }).catch(() => {
+      toast.error('Failed to copy');
+    });
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-secondary-50 dark:bg-secondary-700/50">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium text-secondary-900 dark:text-white">{label}</p>
+        <p className="text-xs text-secondary-500 dark:text-secondary-400 font-mono truncate mt-0.5">{url}</p>
+      </div>
+      <button onClick={handleCopy} className="btn btn-secondary text-xs py-1.5 px-3 shrink-0">
+        Copy Link
+      </button>
     </div>
   );
 }

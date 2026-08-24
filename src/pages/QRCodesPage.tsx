@@ -25,8 +25,16 @@ import { useRestaurant } from '../context/RestaurantContext';
 const CUSTOMER_BASE =
   (import.meta.env.VITE_CUSTOMER_URL as string) || 'http://localhost:5174';
 
-function buildTableUrl(tableNumber: number): string {
-  // Customer HomePage reads: ?table=N or ?tableNumber=N
+function buildTableUrl(tableNumber: number, restaurantId?: string, restaurantSlug?: string): string {
+  // Prefer slug-based URL for cleaner public links
+  if (restaurantSlug) {
+    return `${CUSTOMER_BASE}/restaurant/${encodeURIComponent(restaurantSlug)}?table=${tableNumber}`;
+  }
+  // Fallback to restaurantId-based URL
+  if (restaurantId) {
+    return `${CUSTOMER_BASE}?restaurant=${encodeURIComponent(restaurantId)}&table=${tableNumber}`;
+  }
+  // Last resort (should not happen in production)
   return `${CUSTOMER_BASE}?table=${tableNumber}`;
 }
 
@@ -143,6 +151,8 @@ export default function QRCodesPage() {
 
   const totalTables    = restaurant?.totalTables ?? 0;
   const restaurantName = restaurant?.restaurantName || 'Restaurant';
+  const restaurantId   = restaurant?.restaurantId || '';
+  const restaurantSlug = (restaurant as any)?.restaurantSlug || '';
 
   // Generate table list
   const allTables = Array.from({ length: totalTables }, (_, i) => i + 1);
@@ -154,7 +164,7 @@ export default function QRCodesPage() {
   const handleDownloadOne = async (tableNum: number) => {
     setSingleDL(tableNum);
     try {
-      const blob = await generateCardImage(restaurantName, tableNum, buildTableUrl(tableNum));
+      const blob = await generateCardImage(restaurantName, tableNum, buildTableUrl(tableNum, restaurantId, restaurantSlug));
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href     = url;
@@ -182,7 +192,7 @@ export default function QRCodesPage() {
 
       for (let i = 1; i <= totalTables; i++) {
         toast.loading(`Generating Table ${i}/${totalTables}…`, { id: 'zip-progress' });
-        const blob = await generateCardImage(restaurantName, i, buildTableUrl(i));
+        const blob = await generateCardImage(restaurantName, i, buildTableUrl(i, restaurantId, restaurantSlug));
         zip.file(`${sanitizeName(restaurantName)}-Table-${i}.png`, blob);
       }
 
@@ -315,6 +325,37 @@ export default function QRCodesPage() {
         )}
       </div>
 
+      {/* Online Ordering Link */}
+      {restaurantSlug && (
+        <div className="card p-4 print:hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-secondary-700 dark:text-secondary-300">Online Ordering Link</p>
+              <code className="text-xs text-primary-600 dark:text-primary-400 font-mono mt-1 block">
+                {CUSTOMER_BASE}/restaurant/{restaurantSlug}
+              </code>
+            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${CUSTOMER_BASE}/restaurant/${restaurantSlug}`);
+                toast.success('Link copied!');
+              }}
+              className="btn btn-secondary text-sm py-2 shrink-0"
+            >
+              Copy Link
+            </button>
+          </div>
+          <p className="text-xs text-secondary-400 mt-2">Share this link on Instagram, WhatsApp, Google Business, or your website for online orders.</p>
+        </div>
+      )}
+      {!restaurantSlug && restaurantId && (
+        <div className="card p-4 print:hidden">
+          <p className="text-sm text-secondary-500 dark:text-secondary-400">
+            Your public ordering link is not configured yet. Please contact FlowUp support.
+          </p>
+        </div>
+      )}
+
       {/* Empty state */}
       {totalTables === 0 ? (
         <div className="card p-12 text-center print:hidden">
@@ -347,7 +388,7 @@ export default function QRCodesPage() {
 
               <div className="p-3 bg-white rounded-xl border border-secondary-200 dark:border-secondary-700">
                 <QRCodeSVG
-                  value={buildTableUrl(tableNum)}
+                  value={buildTableUrl(tableNum, restaurantId, restaurantSlug)}
                   size={180}
                   level="M"
                   includeMargin

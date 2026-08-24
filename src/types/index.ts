@@ -1,5 +1,6 @@
 export interface Restaurant {
   restaurantId: string;
+  restaurantSlug?: string;
 
   restaurantName: string;
   restaurantLogo?: string;
