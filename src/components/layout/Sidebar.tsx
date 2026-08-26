@@ -16,6 +16,7 @@ import {
   Table2,
   UserCog,
   QrCode,
+  Truck,
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -30,6 +31,7 @@ interface SidebarProps {
 const menuItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/orders',    label: 'Orders',    icon: ShoppingBag    },
+  { path: '/delivery-enquiries', label: 'Delivery Enquiries', icon: Truck },
   { path: '/categories',label: 'Categories',icon: FolderTree     },
   { path: '/menu',      label: 'Menu',      icon: UtensilsCrossed},
   { path: '/customers', label: 'Customers', icon: Users          },
@@ -47,7 +49,7 @@ export function Sidebar({
 }: SidebarProps) {
   const { logout } = useAuth();
   const { restaurant } = useRestaurant();
-  const { pendingOrders } = useNotification();
+  const { pendingOrders, newDeliveryEnquiryCount } = useNotification();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -231,6 +233,10 @@ export function Sidebar({
       item.path === "/orders" &&
       (pendingOrders?.length || 0) > 0;
 
+    const hasNewEnquiries =
+      item.path === "/delivery-enquiries" &&
+      newDeliveryEnquiryCount > 0;
+
     return (
       <NavLink
         key={item.path}
@@ -243,6 +249,11 @@ export function Sidebar({
           ${
             hasPendingOrders
               ? "bg-warning-50 dark:bg-warning-900/20 border border-warning-300 dark:border-warning-700"
+              : ""
+          }
+          ${
+            hasNewEnquiries
+              ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800"
               : ""
           }
         `
@@ -273,6 +284,27 @@ export function Sidebar({
             {(pendingOrders?.length || 0) > 99
               ? "99+"
               : pendingOrders?.length || 0}
+          </span>
+        )}
+
+        {hasNewEnquiries && (
+          <span
+            className="
+              ml-auto
+              min-w-[20px]
+              h-5
+              px-1
+              flex
+              items-center
+              justify-center
+              rounded-full
+              bg-blue-500
+              text-white
+              text-xs
+              font-bold
+            "
+          >
+            {newDeliveryEnquiryCount > 99 ? "99+" : newDeliveryEnquiryCount}
           </span>
         )}
       </NavLink>

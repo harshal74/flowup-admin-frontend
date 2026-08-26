@@ -18,9 +18,21 @@ export interface WaiterRequest {
   createdAt: string;
 }
 
+export interface DeliveryEnquiryNotif {
+  _id: string;
+  customerName: string;
+  mobile: string;
+  address: string;
+  message: string;
+  status: "NEW" | "CONTACTED" | "RESOLVED" | "CLOSED";
+  createdAt: string;
+}
+
 interface NotificationContextType {
   pendingOrders: any[];
   waiterRequests: WaiterRequest[];
+  deliveryEnquiries: DeliveryEnquiryNotif[];
+  newDeliveryEnquiryCount: number;
   unreadCount: number;
   isLoading: boolean;
   isRinging: boolean;
@@ -43,12 +55,13 @@ function createAudioCtx() {
 }
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const [pendingOrders,  setPendingOrders]  = useState<any[]>([]);
-  const [waiterRequests, setWaiterRequests] = useState<WaiterRequest[]>([]);
-  const [isLoading,      setIsLoading]      = useState(false);
-  const [isRinging,      setIsRinging]      = useState(false);
-  const [soundEnabled,   setSoundEnabled]   = useState(true);
-  const [isConnected,    setIsConnected]    = useState(false);
+  const [pendingOrders,      setPendingOrders]      = useState<any[]>([]);
+  const [waiterRequests,     setWaiterRequests]     = useState<WaiterRequest[]>([]);
+  const [deliveryEnquiries,  setDeliveryEnquiries]  = useState<DeliveryEnquiryNotif[]>([]);
+  const [isLoading,          setIsLoading]          = useState(false);
+  const [isRinging,          setIsRinging]          = useState(false);
+  const [soundEnabled,       setSoundEnabled]       = useState(true);
+  const [isConnected,        setIsConnected]        = useState(false);
 
   const audioCtxRef      = useRef<AudioContext | null>(null);
   const audioIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -83,7 +96,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   }, []);
 
   // Derive unreadCount directly — no separate state to get out of sync
-  const unreadCount = pendingOrders.length + waiterRequests.length;
+  const newDeliveryEnquiryCount = deliveryEnquiries.filter(e => e.status === "NEW").length;
+  const unreadCount = pendingOrders.length + waiterRequests.length + newDeliveryEnquiryCount;
 
   // ── Audio ─────────────────────────────────────────────────────
   const playBeep = useCallback(() => {
@@ -173,6 +187,25 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
+  // ── Load new delivery enquiries from REST ─────────────────────
+  const loadDeliveryEnquiries = useCallback(async () => {
+    try {
+      const res = await API.get("/delivery-enquiries?status=NEW&limit=100");
+      const items: DeliveryEnquiryNotif[] = (res.data.data || []).map((e: any) => ({
+        _id:          String(e._id),
+        customerName: e.customerName || "",
+        mobile:       e.mobile       || "",
+        address:      e.address      || "",
+        message:      e.message      || "",
+        status:       e.status,
+        createdAt:    e.createdAt,
+      }));
+      setDeliveryEnquiries(items);
+    } catch (e) {
+      console.error("[Notification] loadDeliveryEnquiries:", e);
+    }
+  }, []);
+
   // ── Dismiss one notification — DELETE first, then remove from state ──
   const dismissWaiterRequest = useCallback(async (id: string) => {
     // Delete from DB first so a concurrent loadWaiterRequests won't re-add it
@@ -191,6 +224,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   useEffect(() => {
     refreshOrders();
     loadWaiterRequests();
+    loadDeliveryEnquiries();
     connectSocket();
 
     const onConnect    = () => setIsConnected(true);
@@ -232,6 +266,29 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       }
     };
 
+    // ── Delivery enquiry socket handlers ──────────────────────
+    const onDeliveryEnquiryCreated = (enquiry: any) => {
+      const id = String(enquiry._id);
+      const item: DeliveryEnquiryNotif = {
+        _id:          id,
+        customerName: enquiry.customerName || "",
+        mobile:       enquiry.mobile       || "",
+        address:      enquiry.address      || "",
+        message:      enquiry.message      || "",
+        status:       enquiry.status       || "NEW",
+        createdAt:    enquiry.createdAt    || new Date().toISOString(),
+      };
+      setDeliveryEnquiries(prev => prev.some(e => e._id === id) ? prev : [item, ...prev]);
+      if (soundRef.current) playChime();
+    };
+
+    const onDeliveryEnquiryUpdated = (payload: { _id: string; status: string }) => {
+      // Remove from the "NEW" notification list when it moves to another status
+      if (payload.status !== "NEW") {
+        setDeliveryEnquiries(prev => prev.filter(e => e._id !== payload._id));
+      }
+    };
+
     socket.on("connect",               onConnect);
     socket.on("disconnect",            onDisconnect);
     socket.on("connect_error",         onError);
@@ -239,6 +296,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     socket.on("order_status_updated",  onStatusUpdated);
     socket.on("waiter_requested",      onWaiterRequested);
     socket.on("waiter_request_updated", onWaiterRequestUpdated);
+    socket.on("delivery_enquiry_created", onDeliveryEnquiryCreated);
+    socket.on("delivery_enquiry_updated", onDeliveryEnquiryUpdated);
 
     return () => {
       socket.off("connect",               onConnect);
@@ -248,6 +307,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       socket.off("order_status_updated",  onStatusUpdated);
       socket.off("waiter_requested",      onWaiterRequested);
       socket.off("waiter_request_updated", onWaiterRequestUpdated);
+      socket.off("delivery_enquiry_created", onDeliveryEnquiryCreated);
+      socket.off("delivery_enquiry_updated", onDeliveryEnquiryUpdated);
       stopRinging();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -279,8 +340,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   return (
     <NotificationContext.Provider value={{
-      pendingOrders, waiterRequests, unreadCount,
-      isLoading, isRinging, soundEnabled, isConnected,
+      pendingOrders, waiterRequests, deliveryEnquiries, newDeliveryEnquiryCount,
+      unreadCount, isLoading, isRinging, soundEnabled, isConnected,
       dismissWaiterRequest, clearAllWaiterRequests,
       toggleSound, stopRinging,
       acceptOrder, rejectOrder, refreshOrders,
