@@ -8,6 +8,7 @@ import {
 import toast from 'react-hot-toast';
 import { useRestaurant } from '../context/RestaurantContext';
 import API from '../lib/api';
+import { buildCustomerUrl } from '../lib/customerUrl';
 
 export function SettingsPage() {
   const { restaurant, isLoading, updateRestaurant, toggleOpen, toggleFeedback, toggleWhatsapp, refreshRestaurant } = useRestaurant();
@@ -483,10 +484,10 @@ export function SettingsPage() {
           />
           <LoginLinkCard
             label="Customer Ordering"
-            url={(restaurant as any)?.restaurantSlug
-              ? `${(import.meta.env.VITE_CUSTOMER_URL as string) || 'http://localhost:5174'}/restaurant/${(restaurant as any).restaurantSlug}`
-              : `${(import.meta.env.VITE_CUSTOMER_URL as string) || 'http://localhost:5174'}/?restaurant=${restaurant?.restaurantId || ''}`
-            }
+            url={buildCustomerUrl({
+              restaurantSlug: (restaurant as any)?.restaurantSlug,
+              restaurantId: restaurant?.restaurantId,
+            })}
           />
         </div>
       </motion.div>

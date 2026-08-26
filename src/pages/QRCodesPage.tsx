@@ -20,22 +20,11 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRestaurant } from '../context/RestaurantContext';
+import { buildCustomerUrl } from '../lib/customerUrl';
 
-// ── Customer URL builder ──────────────────────────────────────────
-const CUSTOMER_BASE =
-  (import.meta.env.VITE_CUSTOMER_URL as string) || 'http://localhost:5174';
-
+// ── Customer URL builder (centralized) ────────────────────────────
 function buildTableUrl(tableNumber: number, restaurantId?: string, restaurantSlug?: string): string {
-  // Prefer slug-based URL for cleaner public links
-  if (restaurantSlug) {
-    return `${CUSTOMER_BASE}/restaurant/${encodeURIComponent(restaurantSlug)}?table=${tableNumber}`;
-  }
-  // Fallback to restaurantId-based URL
-  if (restaurantId) {
-    return `${CUSTOMER_BASE}?restaurant=${encodeURIComponent(restaurantId)}&table=${tableNumber}`;
-  }
-  // Last resort (should not happen in production)
-  return `${CUSTOMER_BASE}?table=${tableNumber}`;
+  return buildCustomerUrl({ restaurantSlug, restaurantId, table: tableNumber });
 }
 
 // ── Canvas-based card image generation ────────────────────────────
@@ -332,12 +321,12 @@ export default function QRCodesPage() {
             <div>
               <p className="text-sm font-semibold text-secondary-700 dark:text-secondary-300">Online Ordering Link</p>
               <code className="text-xs text-primary-600 dark:text-primary-400 font-mono mt-1 block">
-                {CUSTOMER_BASE}/restaurant/{restaurantSlug}
+                {buildCustomerUrl({ restaurantSlug })}
               </code>
             </div>
             <button
               onClick={() => {
-                navigator.clipboard.writeText(`${CUSTOMER_BASE}/restaurant/${restaurantSlug}`);
+                navigator.clipboard.writeText(buildCustomerUrl({ restaurantSlug }));
                 toast.success('Link copied!');
               }}
               className="btn btn-secondary text-sm py-2 shrink-0"
