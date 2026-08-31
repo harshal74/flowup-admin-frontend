@@ -23,6 +23,7 @@ interface RestaurantContextType {
   toggleOpen: () => Promise<void>;
   toggleFeedback: () => Promise<void>;
   toggleWhatsapp: () => Promise<void>;
+  toggleOnlineDelivery: () => Promise<void>;
 
   refreshRestaurant: () => Promise<void>;
 }
@@ -143,6 +144,16 @@ export function RestaurantProvider({
     }
   };
 
+  const toggleOnlineDelivery = async () => {
+    try {
+      await API.patch("/settings/online-delivery");
+      await fetchRestaurant();
+    } catch (error: any) {
+      console.error("toggleOnlineDelivery error:", error);
+      throw error;
+    }
+  };
+
   return (
     <RestaurantContext.Provider
       value={{
@@ -152,6 +163,7 @@ export function RestaurantProvider({
         toggleOpen,
         toggleFeedback,
         toggleWhatsapp,
+        toggleOnlineDelivery,
         refreshRestaurant:
           fetchRestaurant,
       }}

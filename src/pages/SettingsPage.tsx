@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import {
   Save, Store, Phone, Mail, MapPin, MessageCircle, Star,
   ToggleLeft, ToggleRight, Loader2, Camera, Clock,
-  IndianRupee, Timer, ShoppingCart, Table2, AlertTriangle,
+  IndianRupee, Timer, ShoppingCart, Table2, AlertTriangle, Truck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useRestaurant } from '../context/RestaurantContext';
@@ -11,7 +11,7 @@ import API from '../lib/api';
 import { buildCustomerUrl } from '../lib/customerUrl';
 
 export function SettingsPage() {
-  const { restaurant, isLoading, updateRestaurant, toggleOpen, toggleFeedback, toggleWhatsapp, refreshRestaurant } = useRestaurant();
+  const { restaurant, isLoading, updateRestaurant, toggleOpen, toggleFeedback, toggleWhatsapp, toggleOnlineDelivery, refreshRestaurant } = useRestaurant();
 
   const [formData, setFormData] = useState({
     restaurantName: '',
@@ -139,6 +139,12 @@ export function SettingsPage() {
     toast.success(wasEnabled ? 'WhatsApp disabled' : 'WhatsApp enabled');
   };
 
+  const handleToggleOnlineDelivery = async () => {
+    const wasEnabled = (restaurant as any)?.onlineDeliveryEnabled !== false;
+    await toggleOnlineDelivery();
+    toast.success(wasEnabled ? 'Online delivery disabled' : 'Online delivery enabled');
+  };
+
   if (isLoading) return (
     <div className="animate-pulse space-y-6">
       <div className="skeleton h-8 w-48" />
@@ -181,7 +187,7 @@ export function SettingsPage() {
       {/* ── Quick Toggles ── */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="card p-6">
         <h2 className="text-lg font-semibold text-secondary-900 dark:text-white mb-4">Quick Controls</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           <ToggleCard
             icon={Store}
             iconBgActive="bg-success-100 dark:bg-success-900/30"
@@ -226,6 +232,21 @@ export function SettingsPage() {
             toggleColor="text-success-500"
             isOn={restaurant?.whatsappNotificationsEnabled}
             onToggle={handleToggleWhatsapp}
+          />
+          <ToggleCard
+            icon={Truck}
+            iconBgActive="bg-primary-100 dark:bg-primary-900/30"
+            iconColorActive="text-primary-600"
+            iconBgInactive="bg-secondary-200 dark:bg-secondary-600"
+            iconColorInactive="text-secondary-400"
+            label="Online Delivery"
+            activeText="Available"
+            inactiveText="Disabled"
+            activeTextColor="text-primary-600"
+            inactiveTextColor="text-secondary-500"
+            toggleColor="text-primary-500"
+            isOn={(restaurant as any)?.onlineDeliveryEnabled !== false}
+            onToggle={handleToggleOnlineDelivery}
           />
         </div>
       </motion.div>

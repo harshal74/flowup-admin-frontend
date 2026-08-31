@@ -29,6 +29,9 @@ export interface Restaurant {
   /** Dynamic table configuration */
   totalTables?: number;
 
+  /** When false, Delivery orders are disabled — only Take Away and Dine In are available */
+  onlineDeliveryEnabled?: boolean;
+
   createdAt?: string;
   updatedAt?: string;
 }
