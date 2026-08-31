@@ -11,7 +11,7 @@ import type { Customer, Order } from '../types';
 
 type SortField      = 'name' | 'totalOrders' | 'totalSpent' | 'lastOrderAt' | 'createdAt';
 type SortDir        = 'asc' | 'desc';
-type OrderTypeFilter = '' | 'DINE_IN' | 'DELIVERY';
+type OrderTypeFilter = '' | 'DINE_IN' | 'DELIVERY' | 'TAKE_AWAY';
 
 export function CustomersPage() {
   const [customers, setCustomers]         = useState<Customer[]>([]);
@@ -97,7 +97,7 @@ export function CustomersPage() {
         (c.address || '').toLowerCase().includes(q);
 
       // orderTypes is populated by the backend aggregation on every load
-      const matchType = !orderTypeFilter || (c.orderTypes ?? []).includes(orderTypeFilter as 'DINE_IN' | 'DELIVERY');
+      const matchType = !orderTypeFilter || (c.orderTypes ?? []).includes(orderTypeFilter as 'DINE_IN' | 'DELIVERY' | 'TAKE_AWAY');
 
       return matchSearch && matchType;
     });
@@ -233,9 +233,10 @@ export function CustomersPage() {
               <label className="label mb-3">Order Type Preference</label>
               <div className="flex gap-2 flex-wrap">
                 {([
-                  { value: '' as OrderTypeFilter,         label: 'All',      icon: null     },
-                  { value: 'DINE_IN'  as OrderTypeFilter, label: 'Dine In',  icon: Utensils },
-                  { value: 'DELIVERY' as OrderTypeFilter, label: 'Delivery', icon: Bike     },
+                  { value: '' as OrderTypeFilter,           label: 'All',       icon: null     },
+                  { value: 'DINE_IN'   as OrderTypeFilter,  label: 'Dine In',   icon: Utensils },
+                  { value: 'DELIVERY'  as OrderTypeFilter,  label: 'Delivery',  icon: Bike     },
+                  { value: 'TAKE_AWAY' as OrderTypeFilter,  label: 'Take Away', icon: Bike     },
                 ]).map(({ value, label, icon: Icon }) => (
                   <button
                     key={value}
@@ -297,9 +298,11 @@ export function CustomersPage() {
                         <span key={type} className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
                           type === 'DINE_IN'
                             ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                            : type === 'TAKE_AWAY'
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
                             : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
                         }`}>
-                          {type === 'DINE_IN' ? 'Dine In' : 'Delivery'}
+                          {type === 'DINE_IN' ? 'Dine In' : type === 'TAKE_AWAY' ? 'Take Away' : 'Delivery'}
                         </span>
                       ))}
                     </div>
@@ -406,9 +409,11 @@ export function CustomersPage() {
                       <span key={type} className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         type === 'DINE_IN'
                           ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                          : type === 'TAKE_AWAY'
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
                           : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
                       }`}>
-                        {type === 'DINE_IN' ? 'Dine In' : 'Delivery'}
+                        {type === 'DINE_IN' ? 'Dine In' : type === 'TAKE_AWAY' ? 'Take Away' : 'Delivery'}
                       </span>
                     ))}
                   </div>
@@ -489,9 +494,11 @@ export function CustomersPage() {
                               <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
                                 order.orderType === 'DINE_IN'
                                   ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                  : order.orderType === 'TAKE_AWAY'
+                                  ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
                                   : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
                               }`}>
-                                {order.orderType === 'DINE_IN' ? 'Dine In' : 'Delivery'}
+                                {order.orderType === 'DINE_IN' ? 'Dine In' : order.orderType === 'TAKE_AWAY' ? 'Take Away' : 'Delivery'}
                               </span>
                             </div>
                             <p className="text-xs text-secondary-400 mt-0.5">{formatDateTime(order.createdAt)}</p>

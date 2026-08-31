@@ -102,7 +102,11 @@ export default function BillingTable({
 
                 <tr
                   key={order._id}
-                  className="border-b hover:bg-secondary-50 dark:hover:bg-secondary-700/30"
+                  className={`border-b transition-colors ${
+                    selectedOrders.includes(order._id)
+                      ? '!bg-orange-50 dark:!bg-orange-500/15 border-orange-300 dark:border-orange-500/40'
+                      : 'hover:bg-secondary-50 dark:hover:bg-secondary-700/30'
+                  }`}
                 >
 
                   <td className="px-4 py-4">

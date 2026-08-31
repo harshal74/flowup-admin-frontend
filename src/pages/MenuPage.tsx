@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, Edit2, Trash2, Leaf, Flame, Star, Image, Filter, X, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Leaf, Flame, Star, Image, Filter, X, AlertTriangle, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import API from "../lib/api";
 import type { MenuItem, Category } from '../types';
@@ -17,6 +17,8 @@ export function MenuPage() {
   const [showFilters, setShowFilters] = useState(false);
   // BUG Z FIX: replace window.confirm() with state-based modal
   const [deleteMenuTargetId, setDeleteMenuTargetId] = useState<string | null>(null);
+  // Prevent double-submit: track in-flight save
+  const [isSaving, setIsSaving] = useState(false);
  const [formData, setFormData] = useState({
   name: "",
   description: "",
@@ -54,21 +56,32 @@ export function MenuPage() {
 ) => {
   e.preventDefault();
 
+  // Prevent re-entry (double-click / rapid Enter key)
+  if (isSaving) return;
+
+  // ── Frontend validation ────────────────────────────────────
+  if (!formData.categoryId) {
+    toast.error("Category must be selected.");
+    return;
+  }
+
+  const priceNum     = Number(formData.price);
+  const discountedNum = formData.discountedPrice ? Number(formData.discountedPrice) : null;
+
+  if (discountedNum !== null && discountedNum >= priceNum) {
+    toast.error("Discounted price must be less than the actual price.");
+    return;
+  }
+
+  setIsSaving(true);
   try {
     const itemData = {
       name: formData.name,
       description:
         formData.description,
       image: formData.image,
-      price: Number(
-        formData.price
-      ),
-      discountedPrice:
-        formData.discountedPrice
-          ? Number(
-              formData.discountedPrice
-            )
-          : null,
+      price: priceNum,
+      discountedPrice: discountedNum,
       categoryId:
         formData.categoryId,
       isVeg:
@@ -104,12 +117,13 @@ export function MenuPage() {
     resetForm();
 
     fetchData();
-  } catch (error) {
-    console.error(error);
-
-    toast.error(
-      "Failed to save menu item"
-    );
+  } catch (error: any) {
+    // Show the server's specific error message (e.g. duplicate name, validation)
+    // so the user gets actionable feedback rather than a generic string.
+    const serverMsg = error?.response?.data?.message;
+    toast.error(serverMsg || "Failed to save menu item");
+  } finally {
+    setIsSaving(false);
   }
 };
 
@@ -173,7 +187,7 @@ export function MenuPage() {
     }
   };
 
-  const resetForm = () => { setFormData({ name: '', description: '', image: '', price: '', discountedPrice: '', categoryId: '', isVeg: true, isAvailable: true, isRecommended: false }); setEditingItem(null); };
+  const resetForm = () => { setFormData({ name: '', description: '', image: '', price: '', discountedPrice: '', categoryId: '', isVeg: true, isAvailable: true, isRecommended: false }); setEditingItem(null); setIsSaving(false); };
   const openEditModal = (item: MenuItem) => {
     setEditingItem(item);
     // categoryId may be a populated object { _id, name } — extract the raw ID
@@ -306,7 +320,7 @@ export function MenuPage() {
                   <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={formData.isAvailable} onChange={(e) => setFormData({ ...formData, isAvailable: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm">Available</span></label>
                   <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={formData.isRecommended} onChange={(e) => setFormData({ ...formData, isRecommended: e.target.checked })} className="w-4 h-4 rounded" /><span className="text-sm flex items-center gap-1"><Star className="w-4 h-4 text-warning-500" /> Recommended</span></label>
                 </div>
-                <div className="flex gap-3 pt-4"><button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary flex-1">Cancel</button><button type="submit" className="btn btn-primary flex-1">{editingItem ? 'Update' : 'Create'}</button></div>
+                <div className="flex gap-3 pt-4"><button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary flex-1" disabled={isSaving}>Cancel</button><button type="submit" disabled={isSaving} className="btn btn-primary flex-1">{isSaving ? <><Loader2 className="w-4 h-4 animate-spin" />{editingItem ? 'Updating…' : 'Creating…'}</> : editingItem ? 'Update' : 'Create'}</button></div>
               </form>
             </motion.div>
           </motion.div>

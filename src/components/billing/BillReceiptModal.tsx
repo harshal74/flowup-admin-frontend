@@ -9,6 +9,8 @@ interface BillData {
   tableNumber: number | null;
   subtotal: number;
   gst: number;
+  sgst?: number;
+  cgst?: number;
   discount: number;
   grandTotal: number;
   paymentMethod: string;
@@ -25,6 +27,8 @@ interface Props {
   upiId: string;
   /** Restaurant name from DB settings */
   restaurantName: string;
+  /** GST settings from the backend bill response */
+  gstSettings?: { gstEnabled: boolean; sgstRate: number; cgstRate: number };
   onConfirm: () => Promise<void>;
   onCancel: () => Promise<void>;
 }
@@ -53,6 +57,9 @@ function buildWhatsAppMessage(bill: BillData, restaurantName: string): string {
     .join("\n");
 
   const tableInfo = bill.tableNumber ? `Table: ${bill.tableNumber}\n` : "";
+  const sgst = bill.sgst ?? 0;
+  const cgst = bill.cgst ?? 0;
+  const hasGst = sgst > 0 || cgst > 0;
 
   return (
     `🧾 *Bill from ${restaurantName}*\n` +
@@ -61,7 +68,9 @@ function buildWhatsAppMessage(bill: BillData, restaurantName: string): string {
     `${tableInfo}` +
     `\n*Items:*\n${itemLines}\n\n` +
     `Subtotal: ₹${bill.subtotal.toFixed(2)}\n` +
-    `GST (5%): ₹${bill.gst.toFixed(2)}\n` +
+    (hasGst
+      ? `SGST: ₹${sgst.toFixed(2)}\nCGST: ₹${cgst.toFixed(2)}\n`
+      : "") +
     (bill.discount > 0 ? `Discount: −₹${bill.discount.toFixed(2)}\n` : "") +
     `*Total: ₹${bill.grandTotal.toFixed(2)}*\n\n` +
     `Payment: ${bill.paymentMethod}\n\n` +
@@ -69,12 +78,22 @@ function buildWhatsAppMessage(bill: BillData, restaurantName: string): string {
   );
 }
 
-export default function BillReceiptModal({ bill, upiId, restaurantName, onConfirm, onCancel }: Props) {
+export default function BillReceiptModal({ bill, upiId, restaurantName, gstSettings, onConfirm, onCancel }: Props) {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [cancelLoading,  setCancelLoading]  = useState(false);
 
   const isUPI = bill.paymentMethod === "UPI";
   const upiUrl = buildUpiUrl(upiId, bill.grandTotal, restaurantName);
+
+  // Use bill's stored sgst/cgst (computed by backend) — fall back to legacy gst field
+  const sgst = bill.sgst ?? 0;
+  const cgst = bill.cgst ?? 0;
+  const hasGst = sgst > 0 || cgst > 0 || bill.gst > 0;
+  // For legacy bills that only have gst (no sgst/cgst), show combined
+  const showLegacyGst = !hasGst ? false : (sgst === 0 && cgst === 0 && bill.gst > 0);
+
+  const sgstRate = gstSettings?.sgstRate ?? 0;
+  const cgstRate = gstSettings?.cgstRate ?? 0;
 
   const handleConfirm = async () => {
     setConfirmLoading(true);
@@ -147,10 +166,25 @@ export default function BillReceiptModal({ bill, upiId, restaurantName, onConfir
                 <span>Subtotal</span>
                 <span>₹{bill.subtotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-secondary-600 dark:text-secondary-400">
-                <span>GST (5%)</span>
-                <span>₹{bill.gst.toFixed(2)}</span>
-              </div>
+              {/* Show SGST + CGST separately when available, else legacy GST */}
+              {showLegacyGst && (
+                <div className="flex justify-between text-secondary-600 dark:text-secondary-400">
+                  <span>GST</span>
+                  <span>₹{bill.gst.toFixed(2)}</span>
+                </div>
+              )}
+              {!showLegacyGst && sgst > 0 && (
+                <div className="flex justify-between text-secondary-600 dark:text-secondary-400">
+                  <span>SGST {sgstRate > 0 ? `(${sgstRate}%)` : ""}</span>
+                  <span>₹{sgst.toFixed(2)}</span>
+                </div>
+              )}
+              {!showLegacyGst && cgst > 0 && (
+                <div className="flex justify-between text-secondary-600 dark:text-secondary-400">
+                  <span>CGST {cgstRate > 0 ? `(${cgstRate}%)` : ""}</span>
+                  <span>₹{cgst.toFixed(2)}</span>
+                </div>
+              )}
               {bill.discount > 0 && (
                 <div className="flex justify-between text-green-600">
                   <span>Discount</span>

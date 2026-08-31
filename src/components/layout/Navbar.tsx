@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Menu, Bell, Sun, Moon, User, LogOut, Settings,
-  Check, X, Volume2, VolumeX, ShoppingBag, BellRing,
+  Check, X, Volume2, VolumeX, ShoppingBag, BellRing, Truck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -29,6 +29,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
     waiterRequests,
     dismissWaiterRequest,
     clearAllWaiterRequests,
+    deliveryEnquiries,
   } = useNotification();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -60,9 +61,10 @@ export function Navbar({ onMenuClick }: NavbarProps) {
     }
   };
 
-  // Total notification count = pending orders + unread waiter requests
+  // Total notification count = pending orders + unread waiter requests + new delivery enquiries
+  // unreadCount from context already includes newDeliveryEnquiryCount
   const totalCount = unreadCount;
-  const hasAny     = pendingOrders.length > 0 || waiterRequests.length > 0;
+  const hasAny     = pendingOrders.length > 0 || waiterRequests.length > 0 || deliveryEnquiries.length > 0;
 
   return (
     <>
@@ -259,6 +261,44 @@ export function Navbar({ onMenuClick }: NavbarProps) {
                                 </div>
                               </div>
                             </div>
+                          ))}
+
+                          {/* ── Delivery enquiries (NEW status only) ── */}
+                          {deliveryEnquiries.map((enq) => (
+                            <button
+                              key={enq._id}
+                              type="button"
+                              onClick={() => {
+                                setShowNotifications(false);
+                                navigate('/delivery-enquiries');
+                              }}
+                              className="w-full flex items-start gap-3 px-4 py-3 text-left
+                                         bg-blue-50/60 dark:bg-blue-900/10
+                                         hover:bg-blue-50 dark:hover:bg-blue-900/20
+                                         transition-colors"
+                            >
+                              {/* Truck icon */}
+                              <div className="w-8 h-8 shrink-0 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mt-0.5">
+                                <Truck className="w-4 h-4 text-blue-500" />
+                              </div>
+
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-secondary-900 dark:text-white">
+                                  New Delivery Enquiry
+                                </p>
+                                <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-0.5 truncate">
+                                  {enq.customerName
+                                    ? `${enq.customerName}${enq.address ? ` — ${enq.address}` : ''}`
+                                    : enq.address || 'Check Delivery Enquiries page'
+                                  }
+                                </p>
+                                <p className="text-xs text-secondary-400 mt-0.5">
+                                  {new Date(enq.createdAt).toLocaleTimeString([], {
+                                    hour: '2-digit', minute: '2-digit',
+                                  })}
+                                </p>
+                              </div>
+                            </button>
                           ))}
                         </>
                       )}

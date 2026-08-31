@@ -64,18 +64,14 @@ export default function BillingSummary({
 
       </div>
 
-      {/* GST */}
-
+      {/* GST — shown as 0 in pre-generation preview; actual value comes from backend */}
       <div className="flex justify-between mb-3">
-
         <span className="text-secondary-500">
-          GST (5%)
+          GST (preview)
         </span>
-
         <span>
           ₹{gst.toFixed(2)}
         </span>
-
       </div>
 
       {/* Discount */}

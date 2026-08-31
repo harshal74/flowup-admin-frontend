@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Check, ShoppingBag, MapPin, Clock } from 'lucide-react';
+import { X, Check, ShoppingBag, MapPin, Clock, Truck, Bell } from 'lucide-react';
 import { useNotification } from '../../context/NotificationContext';
 import type { OrderItem } from "../../types";
 
 export function NewOrderAlert() {
   const {
   pendingOrders,
+  deliveryEnquiries,
   isRinging,
   acceptOrder,
   rejectOrder,
@@ -16,8 +17,16 @@ export function NewOrderAlert() {
   const [processing, setProcessing] =
   useState(false);
 
-  if (pendingOrders.length === 0 && !isRinging) return null;
+  const hasOrders    = pendingOrders.length > 0;
+  const hasEnquiries = deliveryEnquiries.length > 0;
+
+  if (!hasOrders && !hasEnquiries && !isRinging) return null;
   const currentOrder = pendingOrders[0];
+
+  // The standalone floating delivery enquiry card has been removed.
+  // Delivery enquiries are now shown inside the Notifications bell panel (Navbar.tsx).
+  // This component only handles pending order alerts and the delivery enquiry
+  // strip that appears within the order modal when both are present.
 
   const handleReject = async () => {
     if (rejectingOrderId && rejectReason) {
@@ -83,7 +92,7 @@ export function NewOrderAlert() {
                     </div>
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-100 dark:bg-primary-900/30">
                       <ShoppingBag className="w-4 h-4 text-primary-500" />
-                      <span className="text-sm font-medium text-primary-700 dark:text-primary-300">{currentOrder.orderType === 'DINE_IN' ? 'Dine In' : 'Delivery'}</span>
+                      <span className="text-sm font-medium text-primary-700 dark:text-primary-300">{currentOrder.orderType === 'DINE_IN' ? 'Dine In' : currentOrder.orderType === 'TAKE_AWAY' ? 'Take Away' : 'Delivery'}</span>
                     </div>
                     {/* Payment badge */}
                     {currentOrder.paymentMethod === 'ONLINE' && currentOrder.paymentStatus === 'PAID' && (
@@ -215,6 +224,20 @@ export function NewOrderAlert() {
               {pendingOrders.length > 1 && (
                 <div className="mt-4 pt-4 border-t border-secondary-200 dark:border-secondary-700">
                   <p className="text-sm text-center text-secondary-500 dark:text-secondary-400">+ {pendingOrders.length - 1} more order{pendingOrders.length > 2 ? 's' : ''} in queue</p>
+                </div>
+              )}
+
+              {/* Delivery enquiry count strip — shown when enquiries AND orders are both active */}
+              {hasEnquiries && (
+                <div className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl
+                                bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                  <Truck className="w-4 h-4 text-blue-500 shrink-0" />
+                  <p className="text-sm text-blue-700 dark:text-blue-300 flex-1">
+                    <span className="font-semibold">{deliveryEnquiries.length}</span> new delivery{' '}
+                    {deliveryEnquiries.length === 1 ? 'enquiry' : 'enquiries'} — check{' '}
+                    <span className="font-semibold">Delivery Enquiries</span> page
+                  </p>
+                  <Bell className="w-3.5 h-3.5 text-blue-400 animate-bounce shrink-0" />
                 </div>
               )}
             </div>

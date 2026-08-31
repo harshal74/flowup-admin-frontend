@@ -205,9 +205,11 @@ export function OrdersPage() {
           <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
             order.orderType === 'DINE_IN'
               ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+              : order.orderType === 'TAKE_AWAY'
+              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
               : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
           }`}>
-            {order.orderType === 'DINE_IN' ? 'Dine In' : 'Delivery'}
+            {order.orderType === 'DINE_IN' ? 'Dine In' : order.orderType === 'TAKE_AWAY' ? 'Take Away' : 'Delivery'}
           </span>
           {order.tableNumber && (
             <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
@@ -384,6 +386,7 @@ export function OrdersPage() {
                   <option value="">All Types</option>
                   <option value="DINE_IN">Dine In</option>
                   <option value="DELIVERY">Delivery</option>
+                  <option value="TAKE_AWAY">Take Away</option>
                 </select>
               </div>
             </div>
@@ -489,9 +492,11 @@ export function OrdersPage() {
                         <span className={`text-xs font-medium px-2 py-1 rounded-full ${
                           order.orderType === 'DINE_IN'
                             ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                            : order.orderType === 'TAKE_AWAY'
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
                             : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
                         }`}>
-                          {order.orderType === 'DINE_IN' ? 'Dine In' : 'Delivery'}
+                          {order.orderType === 'DINE_IN' ? 'Dine In' : order.orderType === 'TAKE_AWAY' ? 'Take Away' : 'Delivery'}
                         </span>
                         {order.tableNumber && (
                           <span className="ml-1 text-xs text-secondary-400">T-{order.tableNumber}</span>
@@ -601,9 +606,11 @@ export function OrdersPage() {
                       <span className={`font-medium px-2 py-0.5 rounded-lg text-xs ${
                         selectedOrder.orderType === 'DINE_IN'
                           ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                          : selectedOrder.orderType === 'TAKE_AWAY'
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
                           : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
                       }`}>
-                        {selectedOrder.orderType === 'DINE_IN' ? 'Dine In' : 'Delivery'}
+                        {selectedOrder.orderType === 'DINE_IN' ? 'Dine In' : selectedOrder.orderType === 'TAKE_AWAY' ? 'Take Away' : 'Delivery'}
                       </span>
                     </div>
                     {selectedOrder.tableNumber && (

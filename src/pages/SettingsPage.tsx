@@ -30,6 +30,9 @@ export function SettingsPage() {
     upiId: '',
     totalTables: 10,
     deliveryPaymentMode: 'COD',
+    gstEnabled: false,
+    sgstRate: 0,
+    cgstRate: 0,
   });
 
   const [isSaving,         setIsSaving]         = useState(false);
@@ -56,6 +59,9 @@ export function SettingsPage() {
         upiId:                  restaurant.upiId                  || '',
         totalTables:            restaurant.totalTables            ?? 10,
         deliveryPaymentMode:    (restaurant as any).deliveryPaymentMode || 'COD',
+        gstEnabled:             (restaurant as any).gstEnabled          ?? false,
+        sgstRate:               Number((restaurant as any).sgstRate)     || 0,
+        cgstRate:               Number((restaurant as any).cgstRate)     || 0,
       });
       setTableError('');
       setTableWarning('');
@@ -392,6 +398,95 @@ export function SettingsPage() {
             </div>
 
           </div>
+        </motion.div>
+
+        {/* ── GST Configuration ── */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="card p-6">
+          <h2 className="text-lg font-semibold text-secondary-900 dark:text-white mb-6">GST Configuration</h2>
+
+          {/* Enable/Disable toggle */}
+          <div className="mb-5">
+            <ToggleCard
+              icon={IndianRupee}
+              iconBgActive="bg-success-100 dark:bg-success-900/30"
+              iconColorActive="text-success-600"
+              iconBgInactive="bg-secondary-200 dark:bg-secondary-600"
+              iconColorInactive="text-secondary-400"
+              label="GST on Bills"
+              activeText="Enabled — SGST + CGST will be added to bills"
+              inactiveText="Disabled — no GST added to bills"
+              activeTextColor="text-success-600"
+              inactiveTextColor="text-secondary-500"
+              toggleColor="text-success-500"
+              isOn={(formData as any).gstEnabled}
+              onToggle={() => set('gstEnabled' as any, !(formData as any).gstEnabled)}
+            />
+          </div>
+
+          {/* Rate inputs — only shown when GST is enabled */}
+          {(formData as any).gstEnabled && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="label">SGST Rate (%)</label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-secondary-400" />
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    step={0.01}
+                    value={(formData as any).sgstRate === 0 ? '' : (formData as any).sgstRate}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      // Store as number — Number('') = 0, Number('2.5') = 2.5
+                      // Leading zeros like '02.5' are stripped by Number() → 2.5
+                      const parsed = raw === '' ? 0 : parseFloat(raw);
+                      set('sgstRate' as any, isNaN(parsed) ? 0 : parsed);
+                    }}
+                    onBlur={(e) => {
+                      // On blur, normalise the displayed value (removes leading zeros)
+                      const parsed = parseFloat(e.target.value);
+                      set('sgstRate' as any, isNaN(parsed) ? 0 : parsed);
+                    }}
+                    className="input pl-12"
+                    placeholder="2.5"
+                  />
+                </div>
+                <p className="text-xs text-secondary-400 mt-1">State GST rate — typically 2.5%</p>
+              </div>
+              <div>
+                <label className="label">CGST Rate (%)</label>
+                <div className="relative">
+                  <IndianRupee className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-secondary-400" />
+                  <input
+                    type="number"
+                    min={0}
+                    max={50}
+                    step={0.01}
+                    value={(formData as any).cgstRate === 0 ? '' : (formData as any).cgstRate}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const parsed = raw === '' ? 0 : parseFloat(raw);
+                      set('cgstRate' as any, isNaN(parsed) ? 0 : parsed);
+                    }}
+                    onBlur={(e) => {
+                      const parsed = parseFloat(e.target.value);
+                      set('cgstRate' as any, isNaN(parsed) ? 0 : parsed);
+                    }}
+                    className="input pl-12"
+                    placeholder="2.5"
+                  />
+                </div>
+                <p className="text-xs text-secondary-400 mt-1">Central GST rate — typically 2.5%</p>
+              </div>
+            </div>
+          )}
+
+          {!(formData as any).gstEnabled && (
+            <p className="text-sm text-secondary-400 dark:text-secondary-500">
+              GST is disabled. Bills will show subtotal as the final amount.
+            </p>
+          )}
         </motion.div>
 
         {/* ── Save ── */}

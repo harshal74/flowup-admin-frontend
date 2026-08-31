@@ -118,6 +118,15 @@ export default function StaffPage() {
   const [saving,   setSaving]   = useState(false);
   const [blocking, setBlocking] = useState(false);
 
+  // Reset password
+  const [resetPwTarget,   setResetPwTarget]   = useState<StaffMember | null>(null);
+  const [resetPwNew,      setResetPwNew]      = useState('');
+  const [resetPwConfirm,  setResetPwConfirm]  = useState('');
+  const [resetPwShowNew,  setResetPwShowNew]  = useState(false);
+  const [resetPwShowConf, setResetPwShowConf] = useState(false);
+  const [resetPwSaving,   setResetPwSaving]   = useState(false);
+  const [resetPwError,    setResetPwError]    = useState<string | null>(null);
+
   // Activity
   const [activities,      setActivities]      = useState<ActivityEntry[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -280,6 +289,40 @@ export default function StaffPage() {
   const closeAddModal = () => {
     setShowAddModal(false);
     setAddForm({ name:'', email:'', mobile:'', role:'WAITER', password:'', confirmPassword:'' });
+  };
+
+  // ── Reset staff password ───────────────────────────────────────
+  const openResetPassword = (s: StaffMember) => {
+    setResetPwTarget(s);
+    setResetPwNew('');
+    setResetPwConfirm('');
+    setResetPwShowNew(false);
+    setResetPwShowConf(false);
+    setResetPwError(null);
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetPwTarget) return;
+    setResetPwError(null);
+    const trimmedNew  = resetPwNew.trim();
+    const trimmedConf = resetPwConfirm.trim();
+    if (!trimmedNew) { setResetPwError('New password is required.'); return; }
+    if (trimmedNew.length < 8) { setResetPwError('Password must be at least 8 characters.'); return; }
+    if (trimmedNew.length > 128) { setResetPwError('Password must be 128 characters or fewer.'); return; }
+    if (trimmedNew !== trimmedConf) { setResetPwError('Passwords do not match.'); return; }
+
+    setResetPwSaving(true);
+    try {
+      await API.patch(`/admin/staff/${resetPwTarget._id}/reset-password`, {
+        newPassword: trimmedNew,
+      });
+      toast.success(`Password reset for ${resetPwTarget.name}.`);
+      setResetPwTarget(null);
+    } catch (err: any) {
+      setResetPwError(err?.response?.data?.message || 'Failed to reset password.');
+    } finally {
+      setResetPwSaving(false);
+    }
   };
 
   // ── Edit staff ────────────────────────────────────────────────
@@ -550,6 +593,13 @@ export default function StaffPage() {
                         title="Edit"
                       >
                         <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => openResetPassword(s)}
+                        className="p-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-600 dark:text-amber-400 transition-colors"
+                        title="Reset Password"
+                      >
+                        <Shield className="w-4 h-4" />
                       </button>
                       {s.isActive ? (
                         <button
@@ -1213,6 +1263,91 @@ export default function StaffPage() {
               </div>
             </div>
           </Drawer>
+        )}
+      </AnimatePresence>
+
+      {/* ══════════════════════════════════════════════════════════
+          RESET STAFF PASSWORD MODAL
+      ══════════════════════════════════════════════════════════ */}
+      <AnimatePresence>
+        {resetPwTarget && (
+          <Modal onClose={() => !resetPwSaving && setResetPwTarget(null)} title="Reset Staff Password" maxW="max-w-md">
+            <div className="space-y-4">
+              {/* Staff context */}
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary-50 dark:bg-secondary-700/50">
+                <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center font-bold text-amber-700 dark:text-amber-400 shrink-0">
+                  {resetPwTarget.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-semibold text-secondary-900 dark:text-white">{resetPwTarget.name}</p>
+                  <p className="text-xs text-secondary-400">{resetPwTarget.role} · {resetPwTarget.email}</p>
+                </div>
+              </div>
+
+              <p className="text-sm text-secondary-600 dark:text-secondary-400">
+                Set a new password for this staff member. The existing password is not shown and will be replaced.
+              </p>
+
+              {/* New Password */}
+              <Field label="New Password *">
+                <div className="relative">
+                  <input
+                    type={resetPwShowNew ? 'text' : 'password'}
+                    value={resetPwNew}
+                    onChange={e => { setResetPwNew(e.target.value); setResetPwError(null); }}
+                    placeholder="Minimum 8 characters"
+                    maxLength={128}
+                    className="input pr-16"
+                    autoFocus
+                  />
+                  <button type="button" tabIndex={-1}
+                    onClick={() => setResetPwShowNew(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-300">
+                    {resetPwShowNew ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </Field>
+
+              {/* Confirm Password */}
+              <Field label="Confirm New Password *">
+                <div className="relative">
+                  <input
+                    type={resetPwShowConf ? 'text' : 'password'}
+                    value={resetPwConfirm}
+                    onChange={e => { setResetPwConfirm(e.target.value); setResetPwError(null); }}
+                    placeholder="Re-enter password"
+                    maxLength={128}
+                    className="input pr-16"
+                  />
+                  <button type="button" tabIndex={-1}
+                    onClick={() => setResetPwShowConf(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-secondary-400 hover:text-secondary-600 dark:hover:text-secondary-300">
+                    {resetPwShowConf ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+              </Field>
+
+              {/* Error */}
+              {resetPwError && (
+                <div className="flex items-start gap-2 p-3 rounded-xl bg-danger-50 dark:bg-danger-900/20 border border-danger-200 dark:border-danger-800">
+                  <AlertTriangle className="w-4 h-4 text-danger-600 dark:text-danger-400 shrink-0 mt-0.5" />
+                  <p className="text-sm text-danger-600 dark:text-danger-400">{resetPwError}</p>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-1">
+                <button onClick={() => setResetPwTarget(null)} disabled={resetPwSaving} className="btn btn-secondary flex-1">
+                  Cancel
+                </button>
+                <button onClick={handleResetPassword} disabled={resetPwSaving} className="btn btn-danger flex-1">
+                  {resetPwSaving
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Resetting…</>
+                    : <><Shield className="w-4 h-4" /> Reset Password</>
+                  }
+                </button>
+              </div>
+            </div>
+          </Modal>
         )}
       </AnimatePresence>
     </div>

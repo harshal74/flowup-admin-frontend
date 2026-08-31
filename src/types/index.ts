@@ -108,7 +108,7 @@ export interface Customer {
   lastOrderAt?: string;
 
   /** Distinct order types this customer has used — populated by backend aggregation */
-  orderTypes?: ('DINE_IN' | 'DELIVERY')[];
+  orderTypes?: ('DINE_IN' | 'DELIVERY' | 'TAKE_AWAY')[];
 
   createdAt: string;
   updatedAt?: string;
@@ -126,7 +126,8 @@ export type OrderStatus =
 
 export type OrderType =
   | "DINE_IN"
-  | "DELIVERY";
+  | "DELIVERY"
+  | "TAKE_AWAY";
 
 export interface OrderItem {
   menuId: string;
