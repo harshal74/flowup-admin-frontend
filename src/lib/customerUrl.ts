@@ -16,6 +16,16 @@
 export const CUSTOMER_APP_URL: string =
   ((import.meta.env.VITE_CUSTOMER_URL as string) || 'http://localhost:5174').replace(/\/+$/, '');
 
+/**
+ * Staff / Waiter frontend base URL.
+ *
+ * Set VITE_WAITER_URL in the deployment environment:
+ *   Dev:  http://localhost:5176  (default fallback)
+ *   Prod: https://staff.flowup.co.in
+ */
+export const WAITER_APP_URL: string =
+  ((import.meta.env.VITE_WAITER_URL as string) || 'http://localhost:5176').replace(/\/+$/, '');
+
 interface UrlOpts {
   restaurantSlug?: string;
   restaurantId?: string;

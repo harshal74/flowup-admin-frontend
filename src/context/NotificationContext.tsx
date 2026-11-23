@@ -28,16 +28,35 @@ export interface DeliveryEnquiryNotif {
   createdAt: string;
 }
 
+export interface LowStockNotif {
+  _id: string;
+  type: "LOW_STOCK";
+  rawMaterialId?: string;
+  title: string;
+  message: string;
+  read: boolean;
+  currentQuantity?: number;
+  minimumQuantity?: number;
+  baseUnit?: string | null;
+  createdAt: string;
+}
+
 interface NotificationContextType {
   pendingOrders: any[];
   waiterRequests: WaiterRequest[];
   deliveryEnquiries: DeliveryEnquiryNotif[];
+  lowStockNotifications: LowStockNotif[];
+  lowStockUnreadCount: number;
+  markLowStockRead: (id: string) => Promise<void>;
+  dismissLowStockNotification: (id: string) => Promise<void>;
   newDeliveryEnquiryCount: number;
   unreadCount: number;
   isLoading: boolean;
   isRinging: boolean;
   soundEnabled: boolean;
   isConnected: boolean;
+  /** Number of staff registration requests currently in PENDING status */
+  pendingStaffCount: number;
 
   dismissWaiterRequest: (id: string) => Promise<void>;
   clearAllWaiterRequests: () => Promise<void>;
@@ -62,6 +81,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const [isRinging,          setIsRinging]          = useState(false);
   const [soundEnabled,       setSoundEnabled]       = useState(true);
   const [isConnected,        setIsConnected]        = useState(false);
+  const [pendingStaffCount,  setPendingStaffCount]  = useState(0);
+  const [lowStockNotifications, setLowStockNotifications] = useState<LowStockNotif[]>([]);
 
   const audioCtxRef      = useRef<AudioContext | null>(null);
   const audioIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -97,7 +118,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
 
   // Derive unreadCount directly — no separate state to get out of sync
   const newDeliveryEnquiryCount = deliveryEnquiries.filter(e => e.status === "NEW").length;
-  const unreadCount = pendingOrders.length + waiterRequests.length + newDeliveryEnquiryCount;
+  const lowStockUnreadCount = lowStockNotifications.filter(n => !n.read).length;
+  const unreadCount = pendingOrders.length + waiterRequests.length + newDeliveryEnquiryCount + lowStockUnreadCount;
 
   // ── Audio ─────────────────────────────────────────────────────
   const playBeep = useCallback(() => {
@@ -206,6 +228,56 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   }, []);
 
+  // ── Load initial pending staff count from REST ─────────────────
+  // Uses the summary field returned by GET /api/admin/staff.
+  // This ensures the badge is correct on page load / refresh,
+  // even if the admin was offline when requests came in.
+  const loadPendingStaffCount = useCallback(async () => {
+    try {
+      const res = await API.get("/admin/staff?limit=1");
+      const count = res.data?.summary?.pending ?? 0;
+      setPendingStaffCount(count);
+    } catch (e) {
+      console.error("[Notification] loadPendingStaffCount:", e);
+    }
+  }, []);
+
+  // ── Load persisted low-stock notifications (Step 4) ───────────
+  const loadLowStockNotifications = useCallback(async () => {
+    try {
+      const res = await API.get("/notifications?type=LOW_STOCK&limit=100");
+      const items: LowStockNotif[] = (res.data.data || []).map((n: any) => ({
+        _id:             String(n._id),
+        type:            "LOW_STOCK",
+        rawMaterialId:   n.rawMaterialId ? String(n.rawMaterialId) : undefined,
+        title:           n.title,
+        message:         n.message,
+        read:            !!n.read,
+        currentQuantity: n.metadata?.currentQuantity,
+        minimumQuantity: n.metadata?.minimumQuantity,
+        baseUnit:        n.metadata?.baseUnit ?? null,
+        createdAt:       n.createdAt,
+      }));
+      setLowStockNotifications(items);
+    } catch (e) {
+      console.error("[Notification] loadLowStockNotifications:", e);
+    }
+  }, []);
+
+  // ── Mark a low-stock notification read (tenant-scoped on backend) ──
+  const markLowStockRead = useCallback(async (id: string) => {
+    // Optimistic UI; backend is authoritative + tenant-scoped.
+    setLowStockNotifications(prev => prev.map(n => n._id === id ? { ...n, read: true } : n));
+    try { await API.patch(`/notifications/${id}/read`); } catch { /* ignore network errors */ }
+  }, []);
+
+  // ── Dismiss (delete) a single low-stock notification ──────────
+  const dismissLowStockNotification = useCallback(async (id: string) => {
+    // Optimistic remove; backend DELETE is tenant-scoped.
+    setLowStockNotifications(prev => prev.filter(n => n._id !== id));
+    try { await API.delete(`/notifications/${id}`); } catch { /* ignore network errors */ }
+  }, []);
+
   // ── Dismiss one notification — DELETE first, then remove from state ──
   const dismissWaiterRequest = useCallback(async (id: string) => {
     // Delete from DB first so a concurrent loadWaiterRequests won't re-add it
@@ -225,6 +297,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     refreshOrders();
     loadWaiterRequests();
     loadDeliveryEnquiries();
+    loadPendingStaffCount();
+    loadLowStockNotifications();
     connectSocket();
 
     const onConnect    = () => setIsConnected(true);
@@ -289,6 +363,54 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       }
     };
 
+    // ── Staff registration request handler ────────────────────
+    // Fired by the backend when a new staff member submits /signup.
+    // restaurantId-scoped by Socket.IO room — Restaurant A admins will
+    // never receive Restaurant B events.
+    const onStaffRegistrationRequest = (payload: {
+      staffId: string;
+      name: string;
+      email: string;
+      role: string;
+      createdAt: string;
+    }) => {
+      setPendingStaffCount(prev => prev + 1);
+      if (soundRef.current) playChime();
+    };
+
+    // ── Low-stock alert handler (Step 4) ──────────────────────
+    // restaurantId-scoped by the Socket.IO room (server emits to the tenant
+    // room only) — Restaurant A never receives Restaurant B alerts.
+    const onLowStockAlert = (payload: any) => {
+      const id = String(payload?.notificationId || "");
+      if (!id) return;
+      const item: LowStockNotif = {
+        _id:             id,
+        type:            "LOW_STOCK",
+        rawMaterialId:   payload.rawMaterialId ? String(payload.rawMaterialId) : undefined,
+        title:           payload.title || "Low Stock",
+        message:         payload.message || "",
+        read:            false,
+        currentQuantity: payload.currentQuantity,
+        minimumQuantity: payload.minimumQuantity,
+        baseUnit:        payload.baseUnit ?? null,
+        createdAt:       payload.createdAt || new Date().toISOString(),
+      };
+      // Dedup by id (guards against socket reconnect re-delivery).
+      setLowStockNotifications(prev => prev.some(n => n._id === id) ? prev : [item, ...prev]);
+      if (soundRef.current) playChime();
+    };
+
+    // ── Auto-dismiss on stock recovery ────────────────────────
+    // Server emits `low_stock_dismissed` with { rawMaterialId } after a
+    // purchase/adjustment brings the material above its minimum threshold.
+    // Remove ALL notifications for that material from the panel instantly.
+    const onLowStockDismissed = (payload: { rawMaterialId: string }) => {
+      const rmId = String(payload?.rawMaterialId || "");
+      if (!rmId) return;
+      setLowStockNotifications(prev => prev.filter(n => n.rawMaterialId !== rmId));
+    };
+
     socket.on("connect",               onConnect);
     socket.on("disconnect",            onDisconnect);
     socket.on("connect_error",         onError);
@@ -298,6 +420,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     socket.on("waiter_request_updated", onWaiterRequestUpdated);
     socket.on("delivery_enquiry_created", onDeliveryEnquiryCreated);
     socket.on("delivery_enquiry_updated", onDeliveryEnquiryUpdated);
+    socket.on("staff_registration_request", onStaffRegistrationRequest);
+    socket.on("low_stock_alert",       onLowStockAlert);
+    socket.on("low_stock_dismissed",   onLowStockDismissed);
 
     return () => {
       socket.off("connect",               onConnect);
@@ -309,6 +434,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       socket.off("waiter_request_updated", onWaiterRequestUpdated);
       socket.off("delivery_enquiry_created", onDeliveryEnquiryCreated);
       socket.off("delivery_enquiry_updated", onDeliveryEnquiryUpdated);
+      socket.off("staff_registration_request", onStaffRegistrationRequest);
+      socket.off("low_stock_alert",       onLowStockAlert);
+      socket.off("low_stock_dismissed",   onLowStockDismissed);
       stopRinging();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -341,7 +469,9 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   return (
     <NotificationContext.Provider value={{
       pendingOrders, waiterRequests, deliveryEnquiries, newDeliveryEnquiryCount,
+      lowStockNotifications, lowStockUnreadCount, markLowStockRead, dismissLowStockNotification,
       unreadCount, isLoading, isRinging, soundEnabled, isConnected,
+      pendingStaffCount,
       dismissWaiterRequest, clearAllWaiterRequests,
       toggleSound, stopRinging,
       acceptOrder, rejectOrder, refreshOrders,

@@ -24,6 +24,8 @@ export interface Restaurant {
   closingTime: string;
 
   currency: string;
+  /** ISO 3166-1 alpha-2 country (e.g. "IN", "US"). Used for WhatsApp phone normalization. */
+  countryCode?: string;
   upiId?: string;
 
   /** Dynamic table configuration */

@@ -8,7 +8,8 @@ import {
 import toast from 'react-hot-toast';
 import { useRestaurant } from '../context/RestaurantContext';
 import API from '../lib/api';
-import { buildCustomerUrl } from '../lib/customerUrl';
+import MetaWhatsAppSection from '../components/settings/MetaWhatsAppSection';
+import { buildCustomerUrl, WAITER_APP_URL } from '../lib/customerUrl';
 
 export function SettingsPage() {
   const { restaurant, isLoading, updateRestaurant, toggleOpen, toggleFeedback, toggleWhatsapp, toggleOnlineDelivery, refreshRestaurant } = useRestaurant();
@@ -27,6 +28,7 @@ export function SettingsPage() {
     openingTime: '09:00',
     closingTime: '23:00',
     currency: 'INR',
+    countryCode: 'IN',
     upiId: '',
     totalTables: 10,
     deliveryPaymentMode: 'COD',
@@ -56,6 +58,7 @@ export function SettingsPage() {
         openingTime:            restaurant.openingTime            || '09:00',
         closingTime:            restaurant.closingTime            || '23:00',
         currency:               restaurant.currency               || 'INR',
+        countryCode:            ((restaurant as any).countryCode || 'IN').toUpperCase(),
         upiId:                  restaurant.upiId                  || '',
         totalTables:            restaurant.totalTables            ?? 10,
         deliveryPaymentMode:    (restaurant as any).deliveryPaymentMode || 'COD',
@@ -311,6 +314,25 @@ export function SettingsPage() {
                 <option value="GBP">GBP – British Pound (£)</option>
                 <option value="AED">AED – UAE Dirham</option>
               </select>
+            </div>
+
+            <div>
+              <label className="label">Country</label>
+              <select value={formData.countryCode} onChange={(e) => set('countryCode', e.target.value)} className="input">
+                <option value="IN">India (IN)</option>
+                <option value="US">United States (US)</option>
+                <option value="CA">Canada (CA)</option>
+                <option value="GB">United Kingdom (GB)</option>
+                <option value="AE">United Arab Emirates (AE)</option>
+                <option value="AU">Australia (AU)</option>
+                <option value="SG">Singapore (SG)</option>
+                <option value="DE">Germany (DE)</option>
+                <option value="FR">France (FR)</option>
+                <option value="SA">Saudi Arabia (SA)</option>
+              </select>
+              <p className="text-xs text-secondary-400 mt-1">
+                Used to format customer phone numbers for WhatsApp notifications.
+              </p>
             </div>
 
             <div className="md:col-span-2">
@@ -589,6 +611,11 @@ export function SettingsPage() {
         </div>
       </motion.div>
 
+      {/* ── Meta WhatsApp (Phase 16 — visibility/onboarding/sync only) ── */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }} className="max-w-4xl">
+        <MetaWhatsAppSection />
+      </motion.div>
+
       {/* ── Login Links ── */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="card p-6 max-w-4xl">
         <h2 className="text-lg font-semibold text-secondary-900 dark:text-white mb-2">Login Links</h2>
@@ -596,7 +623,12 @@ export function SettingsPage() {
         <div className="space-y-4">
           <LoginLinkCard
             label="Staff / Waiter Login"
-            url={`${(import.meta.env.VITE_WAITER_URL as string) || 'http://localhost:5176'}/login`}
+            url={`${WAITER_APP_URL}/login`}
+          />
+          <LoginLinkCard
+            label="Staff Signup"
+            url={`${WAITER_APP_URL}/signup?restaurant=${restaurant?.restaurantId || ''}`}
+            description="Share this link with new staff so they can submit a registration request. You will receive a notification and can approve or reject them from Staff → Pending."
           />
           <LoginLinkCard
             label="Customer Ordering"
@@ -611,7 +643,7 @@ export function SettingsPage() {
   );
 }
 
-function LoginLinkCard({ label, url }: { label: string; url: string }) {
+function LoginLinkCard({ label, url, description }: { label: string; url: string; description?: string }) {
   const handleCopy = () => {
     navigator.clipboard.writeText(url).then(() => {
       toast.success(`${label} link copied`);
@@ -621,14 +653,19 @@ function LoginLinkCard({ label, url }: { label: string; url: string }) {
   };
 
   return (
-    <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-secondary-50 dark:bg-secondary-700/50">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-secondary-900 dark:text-white">{label}</p>
-        <p className="text-xs text-secondary-500 dark:text-secondary-400 font-mono truncate mt-0.5">{url}</p>
+    <div className="rounded-xl bg-secondary-50 dark:bg-secondary-700/50 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-secondary-900 dark:text-white">{label}</p>
+          <p className="text-xs text-secondary-500 dark:text-secondary-400 font-mono truncate mt-0.5">{url}</p>
+        </div>
+        <button onClick={handleCopy} className="btn btn-secondary text-xs py-1.5 px-3 shrink-0">
+          Copy Link
+        </button>
       </div>
-      <button onClick={handleCopy} className="btn btn-secondary text-xs py-1.5 px-3 shrink-0">
-        Copy Link
-      </button>
+      {description && (
+        <p className="text-xs text-secondary-400 dark:text-secondary-500 leading-relaxed">{description}</p>
+      )}
     </div>
   );
 }

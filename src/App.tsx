@@ -16,10 +16,13 @@ import { CustomersPage } from './pages/CustomersPage';
 import { SettingsPage } from './pages/SettingsPage';
 import BillingPage from './pages/BillingPage';
 import TablesPage from './pages/TablesPage';
+import StaffOrderPage from './pages/StaffOrderPage';
 import StaffPage from './pages/StaffPage';
 import QRCodesPage from './pages/QRCodesPage';
 import ProfilePage from './pages/ProfilePage';
 import DeliveryEnquiriesPage from './pages/DeliveryEnquiriesPage';
+import { InventoryPage } from './pages/InventoryPage';
+import { FinancialsPage } from './pages/FinancialsPage';
 
 function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -48,9 +51,12 @@ function AppRoutes() {
         <Route path="/orders" element={<OrdersPage />} />
         <Route path="/categories" element={<CategoriesPage />} />
         <Route path="/menu" element={<MenuPage />} />
+        <Route path="/inventory" element={<InventoryPage />} />
+        <Route path="/financials" element={<FinancialsPage />} />
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/billing"    element={<BillingPage />} />
         <Route path="/tables"     element={<TablesPage />} />
+        <Route path="/tables/:tableNumber/order" element={<StaffOrderPage />} />
         <Route path="/staff"      element={<StaffPage />} />
         <Route path="/qr-codes"   element={<QRCodesPage />} />
         <Route path="/settings"   element={<SettingsPage />} />

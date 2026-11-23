@@ -17,6 +17,8 @@ import {
   UserCog,
   QrCode,
   Truck,
+  Package,
+  Wallet,
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -34,6 +36,8 @@ const menuItems = [
   { path: '/delivery-enquiries', label: 'Delivery Enquiries', icon: Truck },
   { path: '/categories',label: 'Categories',icon: FolderTree     },
   { path: '/menu',      label: 'Menu',      icon: UtensilsCrossed},
+  { path: '/inventory', label: 'Inventory', icon: Package        },
+  { path: '/financials',label: 'Financials',icon: Wallet         },
   { path: '/customers', label: 'Customers', icon: Users          },
   { path: '/billing',   label: 'Billing',   icon: Receipt        },
   { path: '/tables',    label: 'Tables',    icon: Table2         },
@@ -49,7 +53,7 @@ export function Sidebar({
 }: SidebarProps) {
   const { logout } = useAuth();
   const { restaurant } = useRestaurant();
-  const { pendingOrders, newDeliveryEnquiryCount } = useNotification();
+  const { pendingOrders, newDeliveryEnquiryCount, pendingStaffCount, lowStockUnreadCount } = useNotification();
   const navigate = useNavigate();
 
   const handleLogout = async () => {
@@ -237,6 +241,14 @@ export function Sidebar({
       item.path === "/delivery-enquiries" &&
       newDeliveryEnquiryCount > 0;
 
+    const hasPendingStaff =
+      item.path === "/staff" &&
+      pendingStaffCount > 0;
+
+    const hasLowStock =
+      item.path === "/inventory" &&
+      lowStockUnreadCount > 0;
+
     return (
       <NavLink
         key={item.path}
@@ -305,6 +317,48 @@ export function Sidebar({
             "
           >
             {newDeliveryEnquiryCount > 99 ? "99+" : newDeliveryEnquiryCount}
+          </span>
+        )}
+
+        {hasPendingStaff && (
+          <span
+            className="
+              ml-auto
+              min-w-[20px]
+              h-5
+              px-1
+              flex
+              items-center
+              justify-center
+              rounded-full
+              bg-amber-500
+              text-white
+              text-xs
+              font-bold
+            "
+          >
+            {pendingStaffCount > 99 ? "99+" : pendingStaffCount}
+          </span>
+        )}
+
+        {hasLowStock && (
+          <span
+            className="
+              ml-auto
+              min-w-[20px]
+              h-5
+              px-1
+              flex
+              items-center
+              justify-center
+              rounded-full
+              bg-warning-500
+              text-white
+              text-xs
+              font-bold
+            "
+          >
+            {lowStockUnreadCount > 99 ? "99+" : lowStockUnreadCount}
           </span>
         )}
       </NavLink>

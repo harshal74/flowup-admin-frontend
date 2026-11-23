@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Menu, Bell, Sun, Moon, User, LogOut, Settings,
-  Check, X, Volume2, VolumeX, ShoppingBag, BellRing, Truck,
+  Check, X, Volume2, VolumeX, ShoppingBag, BellRing, Truck, AlertTriangle,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -30,6 +30,9 @@ export function Navbar({ onMenuClick }: NavbarProps) {
     dismissWaiterRequest,
     clearAllWaiterRequests,
     deliveryEnquiries,
+    lowStockNotifications,
+    markLowStockRead,
+    dismissLowStockNotification,
   } = useNotification();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -64,7 +67,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
   // Total notification count = pending orders + unread waiter requests + new delivery enquiries
   // unreadCount from context already includes newDeliveryEnquiryCount
   const totalCount = unreadCount;
-  const hasAny     = pendingOrders.length > 0 || waiterRequests.length > 0 || deliveryEnquiries.length > 0;
+  const hasAny     = pendingOrders.length > 0 || waiterRequests.length > 0 || deliveryEnquiries.length > 0 || lowStockNotifications.length > 0;
 
   return (
     <>
@@ -299,6 +302,58 @@ export function Navbar({ onMenuClick }: NavbarProps) {
                                 </p>
                               </div>
                             </button>
+                          ))}
+
+                          {/* ── Low-stock alerts (Inventory Step 4) ── */}
+                          {lowStockNotifications.map((n) => (
+                            <div
+                              key={n._id}
+                              className={`flex items-start gap-3 px-4 py-3 transition-colors
+                                         ${n.read
+                                           ? 'hover:bg-secondary-50 dark:hover:bg-secondary-700/40'
+                                           : 'bg-warning-50/60 dark:bg-warning-900/10 hover:bg-warning-50 dark:hover:bg-warning-900/20'}`}
+                            >
+                              {/* Clickable part — navigates to inventory */}
+                              <button
+                                type="button"
+                                className="flex items-start gap-3 flex-1 min-w-0 text-left"
+                                onClick={() => {
+                                  if (!n.read) markLowStockRead(n._id);
+                                  setShowNotifications(false);
+                                  navigate('/inventory');
+                                }}
+                              >
+                                <div className="w-8 h-8 shrink-0 rounded-lg bg-warning-100 dark:bg-warning-900/30 flex items-center justify-center mt-0.5">
+                                  <AlertTriangle className="w-4 h-4 text-warning-500" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-secondary-900 dark:text-white">
+                                    {n.title || 'Low Stock'}
+                                  </p>
+                                  <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-0.5 truncate">
+                                    {n.message}
+                                  </p>
+                                  <p className="text-xs text-secondary-400 mt-0.5">
+                                    {new Date(n.createdAt).toLocaleTimeString([], {
+                                      hour: '2-digit', minute: '2-digit',
+                                    })}
+                                  </p>
+                                </div>
+                                {!n.read && (
+                                  <span className="w-2 h-2 shrink-0 rounded-full bg-warning-500 mt-2" />
+                                )}
+                              </button>
+
+                              {/* Dismiss × button */}
+                              <button
+                                type="button"
+                                onClick={() => dismissLowStockNotification(n._id)}
+                                className="shrink-0 p-1 rounded-lg hover:bg-warning-100 dark:hover:bg-warning-900/30 text-secondary-400 hover:text-secondary-600 transition-colors"
+                                title="Dismiss"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           ))}
                         </>
                       )}
