@@ -13,8 +13,25 @@
  *   https://app.flowup.co.in/?restaurant=<restaurantId>
  */
 
-export const CUSTOMER_APP_URL: string =
-  ((import.meta.env.VITE_CUSTOMER_URL as string) || 'http://localhost:5174').replace(/\/+$/, '');
+const LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1|\[::1\])$/i;
+const LOCAL_URL_RE = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i;
+
+/**
+ * Pick the public URL of another FlowUp app.
+ * A localhost URL is only used while the admin app itself runs on localhost,
+ * so a missing/dev env var on the production build can never put
+ * "http://localhost:…" into shared links or printed QR codes.
+ */
+function resolveAppUrl(envValue: unknown, devDefault: string, prodDefault: string): string {
+  const value = typeof envValue === 'string' ? envValue.trim().replace(/\/+$/, '') : '';
+  const runningLocally = typeof window !== 'undefined' && LOCAL_HOST_RE.test(window.location.hostname);
+  if (value && (runningLocally || !LOCAL_URL_RE.test(value))) return value;
+  return runningLocally ? devDefault : prodDefault;
+}
+
+export const CUSTOMER_APP_URL: string = resolveAppUrl(
+  import.meta.env.VITE_CUSTOMER_URL, 'http://localhost:5174', 'https://app.flowup.co.in'
+);
 
 /**
  * Staff / Waiter frontend base URL.
@@ -23,8 +40,9 @@ export const CUSTOMER_APP_URL: string =
  *   Dev:  http://localhost:5176  (default fallback)
  *   Prod: https://staff.flowup.co.in
  */
-export const WAITER_APP_URL: string =
-  ((import.meta.env.VITE_WAITER_URL as string) || 'http://localhost:5176').replace(/\/+$/, '');
+export const WAITER_APP_URL: string = resolveAppUrl(
+  import.meta.env.VITE_WAITER_URL, 'http://localhost:5176', 'https://staff.flowup.co.in'
+);
 
 interface UrlOpts {
   restaurantSlug?: string;
