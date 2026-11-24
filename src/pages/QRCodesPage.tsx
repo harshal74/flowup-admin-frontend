@@ -1,9 +1,12 @@
 /**
  * Admin — Table QR Codes Page
  *
- * Generates one QR code per restaurant table that links to the customer ordering URL.
- * Uses restaurant settings (totalTables, restaurantName) from RestaurantContext.
- * QR codes are generated client-side — no backend API needed.
+ * Generates one QR code per restaurant table. Each QR encodes
+ * <customer-app>/q/<qrToken>; the opaque token comes from GET /api/tables
+ * (the backend creates missing tables for 1..totalTables). The QR image itself
+ * is still drawn client-side.
+ *
+ *  - Regenerate QR per table (damaged / copied sticker) — old QR stops working
  *
  * Features:
  *  - Individual PNG download (full card with restaurant name, table number, QR, "SCAN TO ORDER")
@@ -13,18 +16,20 @@
  *  - Refresh button
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import {
-  Download, Printer, RefreshCw, Search, QrCode, Loader2, X,
+  Download, Printer, RefreshCw, Search, QrCode, Loader2, X, RotateCcw,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import API from '../lib/api';
 import { useRestaurant } from '../context/RestaurantContext';
-import { buildCustomerUrl } from '../lib/customerUrl';
+import { buildCustomerUrl, buildTableQrUrl } from '../lib/customerUrl';
 
-// ── Customer URL builder (centralized) ────────────────────────────
-function buildTableUrl(tableNumber: number, restaurantId?: string, restaurantSlug?: string): string {
-  return buildCustomerUrl({ restaurantSlug, restaurantId, table: tableNumber });
+interface TableQr {
+  tableNumber: number;
+  qrToken: string;
+  isActive: boolean;
 }
 
 // ── Canvas-based card image generation ────────────────────────────
@@ -136,24 +141,65 @@ export default function QRCodesPage() {
   const [search,       setSearch]       = useState('');
   const [downloading,  setDownloading]  = useState(false);
   const [singleDL,     setSingleDL]     = useState<number | null>(null);
+  const [tableQrs,     setTableQrs]     = useState<TableQr[]>([]);
+  const [loadingQrs,   setLoadingQrs]   = useState(true);
+  const [regenerating, setRegenerating] = useState<number | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
-  const totalTables    = restaurant?.totalTables ?? 0;
   const restaurantName = restaurant?.restaurantName || 'Restaurant';
   const restaurantId   = restaurant?.restaurantId || '';
   const restaurantSlug = (restaurant as any)?.restaurantSlug || '';
 
-  // Generate table list
-  const allTables = Array.from({ length: totalTables }, (_, i) => i + 1);
+  // Tables + opaque QR tokens from the backend (it creates any missing tables)
+  const fetchTables = useCallback(async () => {
+    setLoadingQrs(true);
+    try {
+      const res = await API.get('/tables');
+      setTableQrs(res.data.data || []);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to load table QR codes');
+    } finally {
+      setLoadingQrs(false);
+    }
+  }, []);
+
+  // Re-fetch when the configured table count changes
+  useEffect(() => { fetchTables(); }, [fetchTables, restaurant?.totalTables]);
+
+  const totalTables = tableQrs.length;
+  const qrUrlByTable = new Map(tableQrs.map(t => [t.tableNumber, buildTableQrUrl(t.qrToken)]));
+  const buildTableUrl = (tableNum: number) => qrUrlByTable.get(tableNum) || '';
+
+  const allTables = tableQrs.map(t => t.tableNumber);
   const tables    = search.trim()
     ? allTables.filter(t => String(t).includes(search.trim()))
     : allTables;
+
+  // ── Regenerate one table's QR ─────────────────────────────────
+  const handleRegenerate = async (tableNum: number) => {
+    if (!window.confirm(
+      `Regenerate the QR code for Table ${tableNum}?\n\n` +
+      'The current QR sticker on this table will stop working immediately, ' +
+      'and guests using it will need to scan the new one. Print and replace the sticker afterwards.'
+    )) return;
+    setRegenerating(tableNum);
+    try {
+      const res = await API.post(`/tables/${tableNum}/regenerate-qr`);
+      const updated: TableQr = res.data.data;
+      setTableQrs(prev => prev.map(t => t.tableNumber === tableNum ? updated : t));
+      toast.success(`Table ${tableNum}: new QR code ready. Print and replace the sticker.`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to regenerate QR code');
+    } finally {
+      setRegenerating(null);
+    }
+  };
 
   // ── Individual download ───────────────────────────────────────
   const handleDownloadOne = async (tableNum: number) => {
     setSingleDL(tableNum);
     try {
-      const blob = await generateCardImage(restaurantName, tableNum, buildTableUrl(tableNum, restaurantId, restaurantSlug));
+      const blob = await generateCardImage(restaurantName, tableNum, buildTableUrl(tableNum));
       const url  = URL.createObjectURL(blob);
       const a    = document.createElement('a');
       a.href     = url;
@@ -179,9 +225,10 @@ export default function QRCodesPage() {
       ]);
       const zip = new JSZip();
 
-      for (let i = 1; i <= totalTables; i++) {
-        toast.loading(`Generating Table ${i}/${totalTables}…`, { id: 'zip-progress' });
-        const blob = await generateCardImage(restaurantName, i, buildTableUrl(i, restaurantId, restaurantSlug));
+      let done = 0;
+      for (const { tableNumber: i } of tableQrs) {
+        toast.loading(`Generating Table ${++done}/${totalTables}…`, { id: 'zip-progress' });
+        const blob = await generateCardImage(restaurantName, i, buildTableUrl(i));
         zip.file(`${sanitizeName(restaurantName)}-Table-${i}.png`, blob);
       }
 
@@ -257,8 +304,9 @@ export default function QRCodesPage() {
   // ── Refresh ───────────────────────────────────────────────────
   const handleRefresh = useCallback(async () => {
     await refreshRestaurant();
+    await fetchTables();
     toast.success('Table configuration refreshed');
-  }, [refreshRestaurant]);
+  }, [refreshRestaurant, fetchTables]);
 
   // ── Render ────────────────────────────────────────────────────
   return (
@@ -345,8 +393,12 @@ export default function QRCodesPage() {
         </div>
       )}
 
-      {/* Empty state */}
-      {totalTables === 0 ? (
+      {/* Loading / empty state */}
+      {loadingQrs && totalTables === 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 print:hidden">
+          {[...Array(4)].map((_, i) => <div key={i} className="skeleton h-80 rounded-2xl" />)}
+        </div>
+      ) : totalTables === 0 ? (
         <div className="card p-12 text-center print:hidden">
           <QrCode className="w-12 h-12 mx-auto text-secondary-300 dark:text-secondary-600 mb-3" />
           <p className="text-secondary-500 dark:text-secondary-400">
@@ -377,7 +429,7 @@ export default function QRCodesPage() {
 
               <div className="p-3 bg-white rounded-xl border border-secondary-200 dark:border-secondary-700">
                 <QRCodeSVG
-                  value={buildTableUrl(tableNum, restaurantId, restaurantSlug)}
+                  value={buildTableUrl(tableNum)}
                   size={180}
                   level="M"
                   includeMargin
@@ -399,6 +451,20 @@ export default function QRCodesPage() {
                   : <Download className="w-3 h-3" />
                 }
                 Download
+              </button>
+
+              {/* Regenerate — hidden when printing */}
+              <button
+                onClick={() => handleRegenerate(tableNum)}
+                disabled={regenerating === tableNum}
+                className="btn btn-secondary text-xs py-1.5 px-3 text-red-600 dark:text-red-400 print:hidden"
+                title="Use if the sticker is damaged or was copied. The old QR stops working."
+              >
+                {regenerating === tableNum
+                  ? <Loader2 className="w-3 h-3 animate-spin" />
+                  : <RotateCcw className="w-3 h-3" />
+                }
+                Regenerate QR
               </button>
             </div>
           ))}

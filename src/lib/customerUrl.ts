@@ -29,22 +29,30 @@ export const WAITER_APP_URL: string =
 interface UrlOpts {
   restaurantSlug?: string;
   restaurantId?: string;
-  table?: number;
 }
 
-/** Build the public customer ordering URL for a restaurant. */
-export function buildCustomerUrl({ restaurantSlug, restaurantId, table }: UrlOpts): string {
-  const q = table != null ? `?table=${encodeURIComponent(String(table))}` : '';
-
+/**
+ * Build the public customer ordering URL for a restaurant (menu link, no table).
+ * Table QR codes use buildTableQrUrl() instead.
+ */
+export function buildCustomerUrl({ restaurantSlug, restaurantId }: UrlOpts): string {
   if (restaurantSlug) {
-    return `${CUSTOMER_APP_URL}/${encodeURIComponent(restaurantSlug)}${q}`;
+    return `${CUSTOMER_APP_URL}/${encodeURIComponent(restaurantSlug)}`;
   }
 
   // Fallback: restaurantId as a query param (slug not set yet)
   if (restaurantId) {
-    const sep = table != null ? '&' : '';
-    return `${CUSTOMER_APP_URL}/?restaurant=${encodeURIComponent(restaurantId)}${sep}${table != null ? `table=${encodeURIComponent(String(table))}` : ''}`;
+    return `${CUSTOMER_APP_URL}/?restaurant=${encodeURIComponent(restaurantId)}`;
   }
 
   return CUSTOMER_APP_URL;
+}
+
+/**
+ * Table QR code URL: https://<customer-app>/q/<qrToken>
+ * The opaque token is resolved server-side to the restaurant + table, so the
+ * table number can't be edited in the URL.
+ */
+export function buildTableQrUrl(qrToken: string): string {
+  return `${CUSTOMER_APP_URL}/q/${encodeURIComponent(qrToken)}`;
 }
