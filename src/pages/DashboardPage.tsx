@@ -195,8 +195,22 @@ export function DashboardPage() {
     (async () => {
       try {
         setIsLoading(true);
-        const res = await API.get('/orders');
-        setAllOrders(res.data?.data || []);
+        // /orders (no filter) returns every active order plus only the latest
+        // ~100 others, so totals computed from it alone are truncated. Load the
+        // full history of the finished statuses too, page by page.
+        const base = await API.get('/orders');
+        const byId = new Map<string, Order>();
+        (base.data?.data || []).forEach((o: Order) => byId.set(o._id, o));
+
+        for (const status of ['COMPLETED', 'REJECTED', 'CANCELLED']) {
+          for (let page = 1; page <= 100; page++) {
+            const r = await API.get('/orders', { params: { status, page, limit: 200 } });
+            const rows: Order[] = r.data?.data || [];
+            rows.forEach((o) => byId.set(o._id, o));
+            if (rows.length < 200) break;
+          }
+        }
+        setAllOrders(Array.from(byId.values()));
       } catch (err) {
         console.error('Dashboard fetch error:', err);
       } finally {
@@ -217,18 +231,32 @@ export function DashboardPage() {
       setAllOrders((prev) =>
         prev.map((o) =>
           o._id === payload.orderId
-            ? { ...o, status: payload.status as Order['status'], ...(payload.completedAt && { completedAt: payload.completedAt }) }
+            ? {
+                ...o,
+                status: payload.status as Order['status'],
+                ...(payload.completedAt && { completedAt: payload.completedAt }),
+                ...(payload.paymentStatus && { paymentStatus: payload.paymentStatus as Order['paymentStatus'] }),
+              }
             : o
         )
       );
     };
 
+    const onPaymentUpdated = (p: { orderIds: string[]; paymentStatus: string }) => {
+      const ids = new Set(p.orderIds);
+      setAllOrders((prev) =>
+        prev.map((o) => (ids.has(o._id) ? { ...o, paymentStatus: p.paymentStatus as Order['paymentStatus'] } : o))
+      );
+    };
+
     socket.on('new_order',            onNewOrder);
     socket.on('order_status_updated', onStatusUpdated);
+    socket.on('order_payment_updated', onPaymentUpdated);
 
     return () => {
       socket.off('new_order',            onNewOrder);
       socket.off('order_status_updated', onStatusUpdated);
+      socket.off('order_payment_updated', onPaymentUpdated);
     };
   }, []);
 
@@ -250,7 +278,14 @@ export function DashboardPage() {
   /** COMPLETED orders in the previous window (for trends) */
   const prevOrders    = useMemo(() => filterByRange(allCompleted, prevRange),    [allCompleted, prevRange]);
 
-  // ── Stats (all based on COMPLETED orders only) ─────────────────
+  // Revenue = money actually collected: COMPLETED + PAID. Same rule the server
+  // uses for Financials "Total Sales", so both pages agree for the same period.
+  const isPaid = (o: Order) => o.paymentStatus === 'PAID';
+  const paidCurrent = useMemo(() => currentOrders.filter(isPaid), [currentOrders]);
+  const paidPrev    = useMemo(() => prevOrders.filter(isPaid),    [prevOrders]);
+  const allPaid     = useMemo(() => allCompleted.filter(isPaid),  [allCompleted]);
+
+  // ── Stats (orders/customers: COMPLETED; revenue: COMPLETED + PAID) ──
   const stats = useMemo(() => {
     const uniqueCustomers = new Set(
       currentOrders.map((o) => (o.customerId as any)?._id || (o.customerId as any) || '').filter(Boolean)
@@ -262,17 +297,17 @@ export function DashboardPage() {
 
     return {
       totalOrders:    currentOrders.length,
-      totalRevenue:   currentOrders.reduce((s, o) => s + o.totalAmount, 0),
+      totalRevenue:   paidCurrent.reduce((s, o) => s + o.totalAmount, 0),
       totalCustomers: uniqueCustomers.size,
       pendingOrders:  pendingLive,
     };
-  }, [currentOrders, allOrders]);
+  }, [currentOrders, paidCurrent, allOrders]);
 
   // ── Trends (COMPLETED vs previous COMPLETED) ───────────────────
   const trends = useMemo(() => {
     if (period === 'total') return { ordersTrend: 0, revenueTrend: 0, customersTrend: 0 };
 
-    const prevRevenue   = prevOrders.reduce((s, o) => s + o.totalAmount, 0);
+    const prevRevenue   = paidPrev.reduce((s, o) => s + o.totalAmount, 0);
     const prevCustomers = new Set(
       prevOrders.map((o) => (o.customerId as any)?._id || (o.customerId as any) || '').filter(Boolean)
     ).size;
@@ -285,16 +320,16 @@ export function DashboardPage() {
       revenueTrend:   calcTrend(stats.totalRevenue, prevRevenue),
       customersTrend: calcTrend(stats.totalCustomers, prevCustomers),
     };
-  }, [period, currentOrders, prevOrders, stats]);
+  }, [period, currentOrders, prevOrders, paidPrev, stats]);
 
   // ── Revenue Chart (COMPLETED orders only) ──────────────────────
   const revenueChart = useMemo(() => {
-    if (period === 'daily'   && currentRange) return buildDailyChart(currentOrders,   currentRange);
-    if (period === 'weekly'  && currentRange) return buildWeeklyChart(currentOrders,  currentRange);
-    if (period === 'monthly' && currentRange) return buildMonthlyChart(currentOrders, currentRange);
-    // total — all completed orders across all time
-    return buildTotalChart(allCompleted);
-  }, [period, currentOrders, currentRange, allCompleted]);
+    if (period === 'daily'   && currentRange) return buildDailyChart(paidCurrent,   currentRange);
+    if (period === 'weekly'  && currentRange) return buildWeeklyChart(paidCurrent,  currentRange);
+    if (period === 'monthly' && currentRange) return buildMonthlyChart(paidCurrent, currentRange);
+    // total — all paid orders across all time
+    return buildTotalChart(allPaid);
+  }, [period, paidCurrent, currentRange, allPaid]);
 
   // ── Status Pie — all statuses scoped to current period ─────────
   const statusChart = useMemo(() => {
