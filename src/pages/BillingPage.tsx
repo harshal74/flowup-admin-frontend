@@ -16,11 +16,20 @@ import {
   generateBill,
   confirmPayment,
   cancelBill,
+  splitBill,
+  confirmSplitPayment,
 } from "../services/billingService";
+import type { SplitRequest, PayMethod, SplitType, BillSplit } from "../components/billing/SplitBill";
 
 import type { Order, OrderStatus } from "../types";
 
 interface GeneratedBill {
+  sgst?: number;
+  cgst?: number;
+  splitType?: SplitType;
+  splits?: BillSplit[];
+  paidAmount?: number;
+  remainingAmount?: number;
   _id: string;
   invoiceNumber: string;
   tableNumber: number | null;
@@ -31,7 +40,7 @@ interface GeneratedBill {
   paymentMethod: string;
   paymentStatus: string;
   createdAt: string;
-  items: { name: string; quantity: number; price: number; total: number }[];
+  items: { menuItemId?: string; name: string; quantity: number; price: number; total: number }[];
   customerName?: string;
   customerMobile?: string;
 }
@@ -145,24 +154,61 @@ export default function BillingPage() {
     }
   };
 
+  /** Shared by single-payment confirm and the last split payment. */
+  const afterBillPaid = (response: any) => {
+    setActiveBill(null); setSelectedOrders([]); setDiscount(0);
+    fetchOrders();
+    // If there are still unpaid orders at the same table, show the popup
+    const remaining: RemainingOrder[] = response.remainingOrders || [];
+    if (remaining.length > 0) {
+      setRemainingOrders(remaining);
+    }
+    // If an ARRIVED reservation was auto-completed after all orders paid, show notification
+    if (response.reservationCompleted) {
+      setReservationCompletedInfo(response.reservationCompleted);
+    }
+  };
+
   const handleConfirmPayment = async () => {
     if (!activeBill) return;
     try {
       const response = await confirmPayment(activeBill._id);
       toast.success("Payment confirmed! Bill closed.");
-      setActiveBill(null); setSelectedOrders([]); setDiscount(0);
-      fetchOrders();
-      // If there are still unpaid orders at the same table, show the popup
-      const remaining: RemainingOrder[] = response.remainingOrders || [];
-      if (remaining.length > 0) {
-        setRemainingOrders(remaining);
-      }
-      // If an ARRIVED reservation was auto-completed after all orders paid, show notification
-      if (response.reservationCompleted) {
-        setReservationCompletedInfo(response.reservationCompleted);
-      }
+      afterBillPaid(response);
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Failed to confirm payment.");
+    }
+  };
+
+  // Keep customer info (not part of the bill document) when the bill is refreshed
+  const mergeBill = (bill: GeneratedBill) =>
+    setActiveBill(prev => prev ? { ...bill, customerName: prev.customerName, customerMobile: prev.customerMobile } : bill);
+
+  const handleSplitBill = async (req: SplitRequest) => {
+    if (!activeBill) return;
+    try {
+      const response = await splitBill(activeBill._id, req);
+      mergeBill(response.bill);
+      toast.success(req.splitType === "NONE" ? "Split removed." : "Bill split. Collect each person's payment.");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to split bill.");
+      throw error; // keep the editor open
+    }
+  };
+
+  const handleConfirmSplit = async (splitId: string, method: PayMethod) => {
+    if (!activeBill) return;
+    try {
+      const response = await confirmSplitPayment(activeBill._id, splitId, method);
+      if (response.billPaid) {
+        toast.success("Everyone has paid. Bill closed.");
+        afterBillPaid(response);
+      } else {
+        mergeBill(response.bill);
+        toast.success(response.message || "Split paid.");
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Failed to confirm split payment.");
     }
   };
 
@@ -220,6 +266,8 @@ export default function BillingPage() {
           gstSettings={gstSettings}
           onConfirm={handleConfirmPayment}
           onCancel={handleCancelBill}
+          onSplit={handleSplitBill}
+          onConfirmSplit={handleConfirmSplit}
         />
       )}
 

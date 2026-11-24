@@ -23,6 +23,18 @@ export const confirmPayment = async (billId: string) => {
   return response.data;
 };
 
+// Split a Pending bill (EQUAL / BY_ITEM / CUSTOM), or { splitType: "NONE" } to undo
+export const splitBill = async (billId: string, data: object) => {
+  const response = await API.patch(`/billing/${billId}/split`, data);
+  return response.data;
+};
+
+// Mark one person's share as paid; response.billPaid === true when the bill is closed
+export const confirmSplitPayment = async (billId: string, splitId: string, paymentMethod: string) => {
+  const response = await API.patch(`/billing/${billId}/splits/${splitId}/confirm`, { paymentMethod });
+  return response.data;
+};
+
 // Called when admin clicks Cancel — reverses the bill
 export const cancelBill = async (billId: string) => {
   const response = await API.delete(`/billing/${billId}`);

@@ -1,9 +1,17 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
-import { CheckCircle, XCircle, Receipt, Loader2, MessageCircle } from "lucide-react";
+import { CheckCircle, XCircle, Receipt, Loader2, MessageCircle, Split } from "lucide-react";
+import {
+  SplitEditor, SplitPayments, isSplitBill,
+  type SplitRequest, type PayMethod, type SplitType, type BillSplit,
+} from "./SplitBill";
 
 interface BillData {
+  splitType?: SplitType;
+  splits?: BillSplit[];
+  paidAmount?: number;
+  remainingAmount?: number;
   _id: string;
   invoiceNumber: string;
   tableNumber: number | null;
@@ -16,12 +24,16 @@ interface BillData {
   paymentMethod: string;
   paymentStatus: string;
   createdAt: string;
-  items: { name: string; quantity: number; price: number; total: number }[];
+  items: { menuItemId?: string; name: string; quantity: number; price: number; total: number }[];
   customerName?: string;
   customerMobile?: string;
 }
 
 interface Props {
+  /** Split this Pending bill (or { splitType: "NONE" } to undo). Omit to hide Split Bill. */
+  onSplit?: (req: SplitRequest) => Promise<void>;
+  /** Mark one split paid. */
+  onConfirmSplit?: (splitId: string, method: PayMethod) => Promise<void>;
   bill: BillData;
   /** UPI ID from restaurant settings (DB) — do NOT read from env */
   upiId: string;
@@ -78,11 +90,25 @@ function buildWhatsAppMessage(bill: BillData, restaurantName: string): string {
   );
 }
 
-export default function BillReceiptModal({ bill, upiId, restaurantName, gstSettings, onConfirm, onCancel }: Props) {
+export default function BillReceiptModal({ bill, upiId, restaurantName, gstSettings, onConfirm, onCancel, onSplit, onConfirmSplit }: Props) {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const [cancelLoading,  setCancelLoading]  = useState(false);
+  const [showSplitEditor, setShowSplitEditor] = useState(false);
+  const [splitSaving,     setSplitSaving]     = useState(false);
 
-  const isUPI = bill.paymentMethod === "UPI";
+  const split   = isSplitBill(bill);
+  const anyPaid = (bill.splits || []).some(s => s.paymentStatus === "Paid");
+
+  const handleSplit = async (req: SplitRequest) => {
+    if (!onSplit) return;
+    setSplitSaving(true);
+    try { await onSplit(req); setShowSplitEditor(false); }
+    catch { /* error already shown; keep the editor open */ }
+    finally { setSplitSaving(false); }
+  };
+
+  // In split mode the single-payment QR/method do not apply
+  const isUPI = !split && bill.paymentMethod === "UPI";
   const upiUrl = buildUpiUrl(upiId, bill.grandTotal, restaurantName);
 
   // Use bill's stored sgst/cgst (computed by backend) — fall back to legacy gst field
@@ -197,17 +223,44 @@ export default function BillReceiptModal({ bill, upiId, restaurantName, gstSetti
                 <span>Grand Total</span>
                 <span>₹{bill.grandTotal.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-secondary-500 dark:text-secondary-400">
-                <span>Payment Method</span>
-                <span className={`font-medium px-2 py-0.5 rounded-full text-xs ${
-                  isUPI
-                    ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
-                    : "bg-secondary-100 text-secondary-600 dark:bg-secondary-700"
-                }`}>
-                  {bill.paymentMethod}
-                </span>
-              </div>
+              {!split && (
+                <div className="flex justify-between text-secondary-500 dark:text-secondary-400">
+                  <span>Payment Method</span>
+                  <span className={`font-medium px-2 py-0.5 rounded-full text-xs ${
+                    isUPI
+                      ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300"
+                      : "bg-secondary-100 text-secondary-600 dark:bg-secondary-700"
+                  }`}>
+                    {bill.paymentMethod}
+                  </span>
+                </div>
+              )}
             </div>
+
+            {/* ── Split bill ── */}
+            {split && onConfirmSplit && (
+              <SplitPayments
+                bill={bill}
+                upiId={upiId}
+                restaurantName={restaurantName}
+                onConfirmSplit={onConfirmSplit}
+                onRemoveSplit={onSplit ? () => onSplit({ splitType: "NONE" }) : undefined}
+              />
+            )}
+            {!split && onSplit && bill.paymentStatus === "Pending" && (
+              showSplitEditor ? (
+                <SplitEditor bill={bill} saving={splitSaving} onSubmit={handleSplit} onClose={() => setShowSplitEditor(false)} />
+              ) : (
+                <button
+                  onClick={() => setShowSplitEditor(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed
+                             border-primary-300 dark:border-primary-700 text-primary-600 dark:text-primary-400
+                             text-sm font-semibold hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
+                >
+                  <Split className="w-4 h-4" /> Split Bill
+                </button>
+              )
+            )}
 
             {/* Item list */}
             {bill.items.length > 0 && (
@@ -252,7 +305,8 @@ export default function BillReceiptModal({ bill, upiId, restaurantName, gstSetti
           <div className="flex gap-3 px-6 pb-6">
             <button
               onClick={handleCancel}
-              disabled={cancelLoading || confirmLoading}
+              disabled={cancelLoading || confirmLoading || anyPaid}
+              title={anyPaid ? "Some people have already paid — this bill can't be cancelled" : undefined}
               className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl
                          bg-secondary-100 dark:bg-secondary-700
                          text-secondary-700 dark:text-secondary-200
@@ -262,16 +316,19 @@ export default function BillReceiptModal({ bill, upiId, restaurantName, gstSetti
               {cancelLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
               Cancel
             </button>
-            <button
-              onClick={handleConfirm}
-              disabled={confirmLoading || cancelLoading}
-              className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl
-                         bg-green-500 hover:bg-green-600
-                         text-white font-semibold transition-colors disabled:opacity-50"
-            >
-              {confirmLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-              {isUPI ? "Payment Received" : "Confirm & Close"}
-            </button>
+            {/* Split bills close automatically when the last split is paid */}
+            {!split && (
+              <button
+                onClick={handleConfirm}
+                disabled={confirmLoading || cancelLoading || showSplitEditor}
+                className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl
+                           bg-green-500 hover:bg-green-600
+                           text-white font-semibold transition-colors disabled:opacity-50"
+              >
+                {confirmLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                {isUPI ? "Payment Received" : "Confirm & Close"}
+              </button>
+            )}
           </div>
         </motion.div>
       </motion.div>
