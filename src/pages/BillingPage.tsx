@@ -18,7 +18,9 @@ import {
   cancelBill,
   splitBill,
   confirmSplitPayment,
+  getPendingBills,
 } from "../services/billingService";
+import { PendingBills, type PendingBill } from "../components/billing/PendingBills";
 import type { SplitRequest, PayMethod, SplitType, BillSplit } from "../components/billing/SplitBill";
 
 import type { Order, OrderStatus } from "../types";
@@ -109,7 +111,34 @@ export default function BillingPage() {
     }
   }, [customerSearch, tableSearch]);
 
+  // Generated-but-unpaid bills (incl. part-paid splits) so they survive a reload
+  const [pendingBills, setPendingBills] = useState<PendingBill[]>([]);
+  const fetchPendingBills = useCallback(async () => {
+    try {
+      const res = await getPendingBills();
+      setPendingBills(res.bills || []);
+      if (res.paymentSettings) {
+        setUpiId(res.paymentSettings.upiId || "");
+        setRestaurantName(res.paymentSettings.restaurantName || "FlowUp Restaurant");
+        setGstSettings({
+          gstEnabled: res.paymentSettings.gstEnabled ?? false,
+          sgstRate:   res.paymentSettings.sgstRate   ?? 0,
+          cgstRate:   res.paymentSettings.cgstRate   ?? 0,
+        });
+      }
+    } catch { /* non-blocking */ }
+  }, []);
+
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  // Re-check pending bills whenever the receipt opens/closes
+  useEffect(() => { if (!activeBill) fetchPendingBills(); }, [activeBill, fetchPendingBills]);
+
+  const openPendingBill = (b: PendingBill) =>
+    setActiveBill({
+      ...(b as unknown as GeneratedBill),
+      customerName:   b.customer?.name   || "",
+      customerMobile: b.customer?.mobile || "",
+    });
   useEffect(() => {
     const t = setTimeout(() => fetchOrders(), 400);
     return () => clearTimeout(t);
@@ -234,6 +263,8 @@ export default function BillingPage() {
         <h1 className="text-2xl font-bold text-secondary-900 dark:text-white">Billing</h1>
         <p className="text-secondary-500 dark:text-secondary-400">Generate bills for completed unpaid orders</p>
       </div>
+
+      <PendingBills bills={pendingBills} onOpen={openPendingBill} />
 
       <BillingFilter
         customer={customerSearch} table={tableSearch}

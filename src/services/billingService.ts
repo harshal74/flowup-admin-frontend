@@ -41,6 +41,12 @@ export const cancelBill = async (billId: string) => {
   return response.data;
 };
 
+// Generated but not fully paid bills (incl. part-paid split bills)
+export const getPendingBills = async () => {
+  const response = await API.get("/billing/pending");
+  return response.data;
+};
+
 export const getBillHistory = async () => {
   const response = await API.get("/billing/history");
   return response.data;
