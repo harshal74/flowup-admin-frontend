@@ -23,6 +23,8 @@ import ProfilePage from './pages/ProfilePage';
 import DeliveryEnquiriesPage from './pages/DeliveryEnquiriesPage';
 import { InventoryPage } from './pages/InventoryPage';
 import { FinancialsPage } from './pages/FinancialsPage';
+import BillHistoryPage from './pages/BillHistoryPage';
+import FeedbackPage from './pages/FeedbackPage';
 
 function AppRoutes() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -55,6 +57,8 @@ function AppRoutes() {
         <Route path="/financials" element={<FinancialsPage />} />
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/billing"    element={<BillingPage />} />
+        <Route path="/bill-history" element={<BillHistoryPage />} />
+        <Route path="/reviews"    element={<FeedbackPage />} />
         <Route path="/tables"     element={<TablesPage />} />
         <Route path="/tables/:tableNumber/order" element={<StaffOrderPage />} />
         <Route path="/staff"      element={<StaffPage />} />

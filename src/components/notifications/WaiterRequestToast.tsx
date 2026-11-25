@@ -40,10 +40,12 @@ function SingleToast({ req, onHide }: { req: WaiterRequest; onHide: () => void }
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-secondary-900 dark:text-white">
-            🔔 Table {req.tableNumber} — Needs assistance
+            {req.requestType === 'BILL' ? '🧾' : '🔔'} Table {req.tableNumber} — {req.requestType === 'BILL' ? 'Bill requested' : 'Needs assistance'}
           </p>
           <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-0.5">
-            {req.customerName ? `Customer: ${req.customerName}` : 'A customer is calling for a waiter'}
+            {req.customerName
+              ? `Customer: ${req.customerName}`
+              : req.requestType === 'BILL' ? 'A customer wants the bill' : 'A customer is calling for a waiter'}
           </p>
           <p className="text-xs text-secondary-400 dark:text-secondary-500 mt-1">
             {new Date(req.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}

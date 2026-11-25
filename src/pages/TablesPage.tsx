@@ -73,7 +73,7 @@ interface TableInfo {
   clean?: TableClean;
 }
 
-interface WaiterReq { _id: string; tableNumber: number; status: string; }
+interface WaiterReq { _id: string; tableNumber: number; status: string; requestType?: 'WAITER' | 'BILL'; }
 
 // ── Status styles ──────────────────────────────────────────────────
 
@@ -197,8 +197,12 @@ function buildTableList(
     if (tableMap.get(c.tableNumber) === 'Available') tableMap.set(c.tableNumber, c.status === 'CLEANING' ? 'Cleaning' : 'Dirty');
   });
 
+  // A customer asking for the bill shows as "Bill Requested"; a waiter call outranks it.
   waiterReqs.forEach(r => {
-    if (r.tableNumber) tableMap.set(r.tableNumber, 'Waiter Requested');
+    if (r.tableNumber && r.requestType === 'BILL') tableMap.set(r.tableNumber, 'Bill Requested');
+  });
+  waiterReqs.forEach(r => {
+    if (r.tableNumber && r.requestType !== 'BILL') tableMap.set(r.tableNumber, 'Waiter Requested');
   });
 
   // Group active reservations by table
@@ -555,8 +559,10 @@ export default function TablesPage() {
       setOrders(p => p.some(o => o._id === order._id) ? p : [order, ...p]);
     const onWaiter = (req: any) => {
       if (!req.tableNumber) return;
-      setWaiterReqs(p => p.some(r => r._id === req._id) ? p : [{ _id: String(req._id), tableNumber: req.tableNumber, status: req.status || 'PENDING' }, ...p]);
+      setWaiterReqs(p => p.some(r => r._id === req._id) ? p : [{ _id: String(req._id), tableNumber: req.tableNumber, status: req.status || 'PENDING', requestType: req.requestType === 'BILL' ? 'BILL' : 'WAITER' }, ...p]);
     };
+    // Bills generated / split / paid / cancelled on any screen → reload so table states stay correct.
+    const onBillUpdated = () => { fetchAll({ silent: true }); };
     const onWaiterUpdate = (p: { _id: string; status: string }) => {
       if (p.status === 'COMPLETED') setWaiterReqs(prev => prev.filter(r => r._id !== p._id));
     };
@@ -573,6 +579,7 @@ export default function TablesPage() {
         : prev.filter(x => x._id !== c._id));
 
     socket.on('table_clean_updated',         onClean);
+    socket.on('bill_updated',                onBillUpdated);
     socket.on('new_order',                   onNewOrder);
     socket.on('order_status_updated',        onOrderUpdate);
     socket.on('waiter_requested',            onWaiter);
@@ -583,6 +590,7 @@ export default function TablesPage() {
 
     return () => {
       socket.off('table_clean_updated',         onClean);
+      socket.off('bill_updated',                onBillUpdated);
       socket.off('new_order',                   onNewOrder);
       socket.off('order_status_updated',        onOrderUpdate);
       socket.off('waiter_requested',            onWaiter);

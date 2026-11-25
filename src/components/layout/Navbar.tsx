@@ -188,12 +188,12 @@ export function Navbar({ onMenuClick }: NavbarProps) {
 
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-secondary-900 dark:text-white">
-                                  Table {req.tableNumber} — Needs assistance
+                                  Table {req.tableNumber} — {req.requestType === 'BILL' ? 'Bill requested' : 'Needs assistance'}
                                 </p>
                                 <p className="text-xs text-secondary-500 dark:text-secondary-400 mt-0.5">
                                   {req.customerName
                                     ? `Customer: ${req.customerName}`
-                                    : 'Calling for a waiter'}
+                                    : req.requestType === 'BILL' ? 'Wants the bill' : 'Calling for a waiter'}
                                 </p>
                                 <p className="text-xs text-secondary-400 mt-0.5">
                                   {new Date(req.createdAt).toLocaleTimeString([], {

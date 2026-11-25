@@ -16,6 +16,7 @@ export function NewOrderAlert() {
   const [rejectReason, setRejectReason] = useState('');
   const [processing, setProcessing] =
   useState(false);
+  const [prepMinutes, setPrepMinutes] = useState<number>(0); // 0 = use restaurant default
 
   const hasOrders    = pendingOrders.length > 0;
   const hasEnquiries = deliveryEnquiries.length > 0;
@@ -179,12 +180,35 @@ export function NewOrderAlert() {
               )}
 
               {currentOrder && !rejectingOrderId && (
+                <div className="mb-4">
+                  <p className="text-xs text-secondary-500 dark:text-secondary-400 mb-2">Preparation time</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[0, 10, 15, 20, 30, 45].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setPrepMinutes(m)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                          prepMinutes === m
+                            ? 'bg-primary-600 text-white border-primary-600'
+                            : 'bg-white dark:bg-secondary-800 text-secondary-700 dark:text-secondary-300 border-secondary-200 dark:border-secondary-600'
+                        }`}
+                      >
+                        {m === 0 ? 'Default' : `${m} min`}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {currentOrder && !rejectingOrderId && (
                 <div className="flex gap-3">
                   <button
                     onClick={async () => {
                       setProcessing(true);
                       try {
-                        await acceptOrder(currentOrder._id);
+                        await acceptOrder(currentOrder._id, prepMinutes || undefined);
+                        setPrepMinutes(0);
                       } finally {
                         // BUG R FIX: always reset processing, even on error
                         setProcessing(false);

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import socket from "../lib/socket";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X, User, MapPin, Check, Clock, ChefHat, Package,
@@ -19,6 +20,7 @@ import {
   splitBill,
   confirmSplitPayment,
   getPendingBills,
+  getBillById,
 } from "../services/billingService";
 import { PendingBills, type PendingBill } from "../components/billing/PendingBills";
 import type { SplitRequest, PayMethod, SplitType, BillSplit } from "../components/billing/SplitBill";
@@ -130,6 +132,35 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
+
+  // ── Live billing: another screen changed a bill ──────────────
+  const activeBillRef = useRef<GeneratedBill | null>(null);
+  activeBillRef.current = activeBill;
+  const selfActionRef = useRef(false);
+  const fetchOrdersRef = useRef(fetchOrders);
+  fetchOrdersRef.current = fetchOrders;
+  useEffect(() => {
+    const onBillUpdated = async (p: { billId: string; action: string }) => {
+      fetchOrdersRef.current();
+      fetchPendingBills();
+      const open = activeBillRef.current;
+      if (!open || open._id !== p.billId) return;
+      if (selfActionRef.current) return; // our own request; its response updates the view
+      if (p.action === "paid" || p.action === "cancelled") {
+        setActiveBill(null);
+        toast(p.action === "paid" ? "This bill was paid on another screen." : "This bill was cancelled on another screen.");
+        return;
+      }
+      try {
+        const res = await getBillById(p.billId);
+        if (res?.bill) mergeBill(res.bill);
+      } catch { /* keep current view */ }
+    };
+    socket.on("bill_updated", onBillUpdated);
+    return () => { socket.off("bill_updated", onBillUpdated); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetchPendingBills]);
+
   // Re-check pending bills whenever the receipt opens/closes
   useEffect(() => { if (!activeBill) fetchPendingBills(); }, [activeBill, fetchPendingBills]);
 
@@ -200,12 +231,15 @@ export default function BillingPage() {
 
   const handleConfirmPayment = async () => {
     if (!activeBill) return;
+    selfActionRef.current = true;
     try {
       const response = await confirmPayment(activeBill._id);
       toast.success("Payment confirmed! Bill closed.");
       afterBillPaid(response);
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Failed to confirm payment.");
+    } finally {
+      selfActionRef.current = false;
     }
   };
 
@@ -215,6 +249,7 @@ export default function BillingPage() {
 
   const handleSplitBill = async (req: SplitRequest) => {
     if (!activeBill) return;
+    selfActionRef.current = true;
     try {
       const response = await splitBill(activeBill._id, req);
       mergeBill(response.bill);
@@ -222,11 +257,14 @@ export default function BillingPage() {
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Failed to split bill.");
       throw error; // keep the editor open
+    } finally {
+      selfActionRef.current = false;
     }
   };
 
   const handleConfirmSplit = async (splitId: string, method: PayMethod) => {
     if (!activeBill) return;
+    selfActionRef.current = true;
     try {
       const response = await confirmSplitPayment(activeBill._id, splitId, method);
       if (response.billPaid) {
@@ -238,17 +276,22 @@ export default function BillingPage() {
       }
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Failed to confirm split payment.");
+    } finally {
+      selfActionRef.current = false;
     }
   };
 
   const handleCancelBill = async () => {
     if (!activeBill) return;
+    selfActionRef.current = true;
     try {
       await cancelBill(activeBill._id);
       toast("Bill cancelled. Orders returned to unpaid list.");
       setActiveBill(null); fetchOrders();
     } catch (error: any) {
       toast.error(error?.response?.data?.message || "Failed to cancel bill.");
+    } finally {
+      selfActionRef.current = false;
     }
   };
 

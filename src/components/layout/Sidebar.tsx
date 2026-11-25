@@ -19,6 +19,8 @@ import {
   Truck,
   Package,
   Wallet,
+  History,
+  Star,
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -40,6 +42,8 @@ const menuItems = [
   { path: '/financials',label: 'Financials',icon: Wallet         },
   { path: '/customers', label: 'Customers', icon: Users          },
   { path: '/billing',   label: 'Billing',   icon: Receipt        },
+  { path: '/bill-history', label: 'Bill History', icon: History },
+  { path: '/reviews',   label: 'Reviews',   icon: Star           },
   { path: '/tables',    label: 'Tables',    icon: Table2         },
   { path: '/staff',     label: 'Staff',     icon: UserCog        },
   { path: '/qr-codes', label: 'QR Codes',  icon: QrCode         },

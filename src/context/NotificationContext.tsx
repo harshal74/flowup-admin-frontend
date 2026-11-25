@@ -15,6 +15,7 @@ export interface WaiterRequest {
   tableNumber: number;
   customerName: string;
   status: "PENDING" | "ACCEPTED" | "COMPLETED";
+  requestType?: "WAITER" | "BILL";
   createdAt: string;
 }
 
@@ -62,7 +63,7 @@ interface NotificationContextType {
   clearAllWaiterRequests: () => Promise<void>;
   toggleSound: () => void;
   stopRinging: () => void;
-  acceptOrder: (orderId: string) => Promise<any>;
+  acceptOrder: (orderId: string, estimatedTime?: number) => Promise<any>;
   rejectOrder: (orderId: string, reason?: string) => Promise<any>;
   refreshOrders: () => Promise<void>;
 }
@@ -200,6 +201,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         tableNumber:  r.tableNumber,
         customerName: r.customerName || "",
         status:       r.status,
+        requestType:  r.requestType === "BILL" ? "BILL" : "WAITER",
         createdAt:    r.createdAt,
       }));
       setWaiterRequests(items);
@@ -327,6 +329,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         tableNumber:  req.tableNumber,
         customerName: req.customerName || "",
         status:       req.status || "PENDING",
+        requestType:  req.requestType === "BILL" ? "BILL" : "WAITER",
         createdAt:    req.createdAt || new Date().toISOString(),
       };
       setWaiterRequests(prev => prev.some(r => r._id === id) ? prev : [item, ...prev]);
@@ -442,11 +445,11 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const acceptOrder = async (orderId: string) => {
+  const acceptOrder = async (orderId: string, estimatedTime?: number) => {
     try {
       stopRinging();
       setPendingOrders(prev => prev.filter(o => o._id !== orderId));
-      const res = await API.patch(`/orders/${orderId}/accept`);
+      const res = await API.patch(`/orders/${orderId}/accept`, estimatedTime ? { estimatedTime } : {});
       return { success: true, data: res.data };
     } catch (error: any) {
       await refreshOrders();

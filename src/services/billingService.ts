@@ -47,8 +47,22 @@ export const getPendingBills = async () => {
   return response.data;
 };
 
-export const getBillHistory = async () => {
-  const response = await API.get("/billing/history");
+export interface BillHistoryParams {
+  page?: number;
+  limit?: number;
+  from?: string;    // YYYY-MM-DD (IST)
+  to?: string;      // YYYY-MM-DD (IST)
+  table?: string;
+  invoice?: string;
+  status?: string;  // Paid | Pending
+}
+
+export const getBillHistory = async (params: BillHistoryParams = {}) => {
+  const clean: Record<string, string | number> = {};
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== "") clean[k] = v as string | number;
+  });
+  const response = await API.get("/billing/history", { params: clean });
   return response.data;
 };
 

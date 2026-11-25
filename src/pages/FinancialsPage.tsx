@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Wallet, TrendingUp, TrendingDown, Package, Receipt, Percent,
-  Plus, Edit2, Trash2, X, Loader2, AlertTriangle, ChevronLeft, ChevronRight,
+  Plus, Edit2, Trash2, X, Loader2, Download, AlertTriangle, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -119,6 +119,31 @@ export function FinancialsPage() {
     }
     return params.join('&');
   }, [range, offset, customStart, customEnd]);
+
+  // ── CSV export (server builds the file; we only download the blob) ──
+  const [exporting, setExporting] = useState<string | null>(null);
+  const exportCsv = async (type: 'sales' | 'expenses' | 'summary') => {
+    if (range === 'custom' && (!customStart || !customEnd)) {
+      toast.error('Pick a start and end date first.');
+      return;
+    }
+    setExporting(type);
+    try {
+      const res = await API.get(`/financials/export?type=${type}&${rangeQuery()}`, { responseType: 'blob' });
+      const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${type}-${summary?.range?.label?.replace(/[^\w-]+/g, '_') || range}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Failed to export. Please try again.');
+    } finally {
+      setExporting(null);
+    }
+  };
 
   const fetchData = useCallback(async (page = 1) => {
     // Custom range needs both dates before we query.
@@ -316,7 +341,21 @@ export function FinancialsPage() {
           <h1 className="text-2xl font-bold text-secondary-900 dark:text-white">Financials</h1>
           <p className="text-secondary-500 dark:text-secondary-400">Profit &amp; Loss overview and expense management</p>
         </div>
-        <button onClick={openAdd} className="btn btn-primary"><Plus className="w-5 h-5" /> Add Expense</button>
+        <div className="flex flex-wrap items-center gap-2">
+          {(['sales', 'expenses', 'summary'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => exportCsv(t)}
+              disabled={exporting !== null}
+              className="btn btn-secondary text-sm disabled:opacity-60"
+              title={`Download ${t} for the selected period as CSV (opens in Excel)`}
+            >
+              {exporting === t ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {t === 'sales' ? 'Sales CSV' : t === 'expenses' ? 'Expenses CSV' : 'Summary CSV'}
+            </button>
+          ))}
+          <button onClick={openAdd} className="btn btn-primary"><Plus className="w-5 h-5" /> Add Expense</button>
+        </div>
       </div>
 
       {/* Date range selector */}
