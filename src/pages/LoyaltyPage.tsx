@@ -19,9 +19,16 @@ export default function LoyaltyPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+
+  // ── Redeem modal state ──────────────────────────────────────────
   const [redeemTarget, setRedeemTarget] = useState<LoyaltyRow | null>(null);
   const [redeemPoints, setRedeemPoints] = useState("");
   const [redeemBusy, setRedeemBusy] = useState(false);
+
+  // ── Earn modal state (replaces browser prompt()) ───────────────
+  const [earnTarget,  setEarnTarget]  = useState<LoyaltyRow | null>(null);
+  const [earnOrderId, setEarnOrderId] = useState("");
+  const [earnBusy,    setEarnBusy]    = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,16 +42,18 @@ export default function LoyaltyPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleEarn = async (_customerId: string) => {
-    const orderId = prompt("Enter the Order ID to award points for:");
-    if (!orderId?.trim()) return;
+  const handleEarn = async () => {
+    if (!earnTarget || !earnOrderId.trim()) return;
+    setEarnBusy(true);
     try {
-      const res = await API.post("/loyalty/earn", { orderId: orderId.trim() });
+      const res = await API.post("/loyalty/earn", { orderId: earnOrderId.trim() });
       toast.success(`${res.data.pointsEarned} pts awarded. New balance: ${res.data.balance}`);
+      setEarnTarget(null);
+      setEarnOrderId("");
       load();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to award points.");
-    }
+    } finally { setEarnBusy(false); }
   };
 
   const handleRedeem = async () => {
@@ -82,7 +91,7 @@ export default function LoyaltyPage() {
         ) : rows.length === 0 ? (
           <div className="p-10 text-center text-secondary-500">
             <Star className="w-8 h-8 mx-auto mb-2 opacity-40" />
-            No customers have earned points yet.
+            No customers have earned points yet. Points are earned automatically when you complete and pay an order. Use the "+ Earn" button to manually award points for a specific order ID.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -91,32 +100,39 @@ export default function LoyaltyPage() {
                 <tr>
                   <th className="px-4 py-3">Customer</th>
                   <th className="px-4 py-3 text-right">Balance</th>
-                  <th className="px-4 py-3 text-right hidden sm:table-cell">Earned</th>
+                  <th className="px-4 py-3 text-right hidden sm:table-cell">Lifetime Earned</th>
                   <th className="px-4 py-3 text-right hidden md:table-cell">Redeemed</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r._id} className="border-t border-secondary-100 dark:border-secondary-700">
+                  <tr key={r._id} className="border-t border-secondary-100 dark:border-secondary-700 hover:bg-secondary-50 dark:hover:bg-secondary-700/30 transition-colors">
                     <td className="px-4 py-3">
                       <p className="font-medium text-secondary-900 dark:text-white">{r.customerId?.name || "Guest"}</p>
                       <p className="text-xs text-secondary-400">{r.customerId?.mobile || ""}</p>
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span className="font-bold text-primary-600 dark:text-primary-400">{r.balance} pts</span>
+                      <p className="text-xs text-secondary-400">≈ ₹{r.balance}</p>
                     </td>
-                    <td className="px-4 py-3 text-right hidden sm:table-cell text-secondary-500">{r.lifetimeEarned}</td>
-                    <td className="px-4 py-3 text-right hidden md:table-cell text-secondary-500">{r.lifetimeRedeemed}</td>
+                    <td className="px-4 py-3 text-right hidden sm:table-cell text-secondary-500">{r.lifetimeEarned} pts</td>
+                    <td className="px-4 py-3 text-right hidden md:table-cell text-secondary-500">{r.lifetimeRedeemed} pts</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => handleEarn(r.customerId?._id || "")}
-                          className="text-xs btn btn-secondary py-1 px-2.5">
+                        <button
+                          onClick={() => { setEarnTarget(r); setEarnOrderId(""); }}
+                          className="text-xs btn btn-secondary py-1 px-2.5"
+                          title="Award points for a specific order"
+                        >
                           + Earn
                         </button>
                         {r.balance >= 10 && (
-                          <button onClick={() => { setRedeemTarget(r); setRedeemPoints(""); }}
-                            className="text-xs btn btn-primary py-1 px-2.5">
+                          <button
+                            onClick={() => { setRedeemTarget(r); setRedeemPoints(""); }}
+                            className="text-xs btn btn-primary py-1 px-2.5"
+                            title="Redeem points as discount"
+                          >
                             Redeem
                           </button>
                         )}
@@ -132,41 +148,91 @@ export default function LoyaltyPage() {
         <div className="flex items-center justify-between px-4 py-3 border-t border-secondary-100 dark:border-secondary-700 text-sm">
           <span className="text-secondary-500">{total} customer{total !== 1 ? "s" : ""} with points</span>
           <div className="flex items-center gap-2">
-            <button className="btn btn-secondary p-2" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+            <button className="btn btn-secondary p-2" disabled={page <= 1} onClick={() => setPage(p => p - 1)} aria-label="Previous">
               <ChevronLeft className="w-4 h-4" />
             </button>
             <span>Page {page} of {totalPages}</span>
-            <button className="btn btn-secondary p-2" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+            <button className="btn btn-secondary p-2" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} aria-label="Next">
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Redeem modal */}
+      {/* ── Earn modal (replaces prompt()) ─────────────────────────── */}
+      {earnTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setEarnTarget(null)}>
+          <div className="w-full max-w-sm bg-white dark:bg-secondary-800 rounded-2xl shadow-2xl p-6 space-y-4"
+            onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-secondary-900 dark:text-white">Award Points</h3>
+            <p className="text-sm text-secondary-500">
+              Award points to <strong>{earnTarget.customerId?.name || "this customer"}</strong> for a completed and paid order.
+            </p>
+            <div>
+              <label className="label">Order ID</label>
+              <input
+                type="text"
+                className="input font-mono text-sm"
+                placeholder="Paste the MongoDB Order _id here"
+                value={earnOrderId}
+                onChange={e => setEarnOrderId(e.target.value)}
+                autoFocus
+              />
+              <p className="text-xs text-secondary-400 mt-1">
+                Find the Order _id in the Orders page → View Order → copy from the URL or order detail.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setEarnTarget(null)} className="btn btn-secondary flex-1">Cancel</button>
+              <button
+                onClick={handleEarn}
+                disabled={earnBusy || !earnOrderId.trim()}
+                className="btn btn-primary flex-1 disabled:opacity-60"
+              >
+                {earnBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Award Points"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Redeem modal ───────────────────────────────────────────── */}
       {redeemTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setRedeemTarget(null)}>
           <div className="w-full max-w-sm bg-white dark:bg-secondary-800 rounded-2xl shadow-2xl p-6 space-y-4"
             onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-secondary-900 dark:text-white">Redeem Points</h3>
             <p className="text-sm text-secondary-500">
-              {redeemTarget.customerId?.name} has <strong>{redeemTarget.balance} pts</strong>
-              {" "}(worth ₹{redeemTarget.balance}).
+              <strong>{redeemTarget.customerId?.name}</strong> has{" "}
+              <strong className="text-primary-600">{redeemTarget.balance} pts</strong>{" "}
+              (worth ₹{redeemTarget.balance}).
             </p>
             <div>
-              <label className="label">Points to redeem (min 10)</label>
-              <input type="number" min={10} max={redeemTarget.balance} className="input"
-                value={redeemPoints} onChange={e => setRedeemPoints(e.target.value)}
-                placeholder="e.g. 50" />
+              <label className="label">Points to redeem (min 10, max {redeemTarget.balance})</label>
+              <input
+                type="number"
+                min={10}
+                max={redeemTarget.balance}
+                className="input"
+                value={redeemPoints}
+                onChange={e => setRedeemPoints(e.target.value)}
+                placeholder="e.g. 50"
+                autoFocus
+              />
               {redeemPoints && Number(redeemPoints) >= 10 && (
-                <p className="text-xs text-primary-600 mt-1">= ₹{redeemPoints} discount</p>
+                <p className="text-xs text-primary-600 mt-1">
+                  = ₹{redeemPoints} discount on the customer's next order
+                </p>
               )}
             </div>
             <div className="flex gap-3">
               <button onClick={() => setRedeemTarget(null)} className="btn btn-secondary flex-1">Cancel</button>
-              <button onClick={handleRedeem} disabled={redeemBusy || !redeemPoints}
-                className="btn btn-primary flex-1 disabled:opacity-60">
-                {redeemBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Redeem"}
+              <button
+                onClick={handleRedeem}
+                disabled={redeemBusy || !redeemPoints || Number(redeemPoints) < 10}
+                className="btn btn-primary flex-1 disabled:opacity-60"
+              >
+                {redeemBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm Redeem"}
               </button>
             </div>
           </div>
