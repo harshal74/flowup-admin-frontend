@@ -22,6 +22,7 @@ import QRCodesPage from './pages/QRCodesPage';
 import ProfilePage from './pages/ProfilePage';
 import DeliveryEnquiriesPage from './pages/DeliveryEnquiriesPage';
 import { InventoryPage } from './pages/InventoryPage';
+import LoyaltyPage from './pages/LoyaltyPage';
 import { FinancialsPage } from './pages/FinancialsPage';
 import BillHistoryPage from './pages/BillHistoryPage';
 import FeedbackPage from './pages/FeedbackPage';
@@ -58,8 +59,9 @@ function AppRoutes() {
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/billing"    element={<BillingPage />} />
         <Route path="/bill-history" element={<BillHistoryPage />} />
-        <Route path="/reviews"    element={<FeedbackPage />} />
-        <Route path="/tables"     element={<TablesPage />} />
+        <Route path="/reviews"      element={<FeedbackPage />} />
+        <Route path="/loyalty"      element={<LoyaltyPage />} />
+        <Route path="/tables"       element={<TablesPage />} />
         <Route path="/tables/:tableNumber/order" element={<StaffOrderPage />} />
         <Route path="/staff"      element={<StaffPage />} />
         <Route path="/qr-codes"   element={<QRCodesPage />} />

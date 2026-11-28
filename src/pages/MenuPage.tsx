@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Search, Edit2, Trash2, Leaf, Flame, Star, Image, Filter, X, AlertTriangle, Loader2, ClipboardList } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Leaf, Flame, Star, Image, Filter, X, AlertTriangle, Loader2, ClipboardList, PlusSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import API from "../lib/api";
 import type { MenuItem, Category } from '../types';
@@ -335,6 +335,40 @@ export function MenuPage() {
   };
 
   const resetForm = () => { setFormData({ name: '', description: '', image: '', price: '', discountedPrice: '', categoryId: '', isVeg: true, isAvailable: true, isRecommended: false }); setEditingItem(null); setIsSaving(false); };
+
+  // ── Modifiers (add-ons) ────────────────────────────────────────
+  const [modifierItem,  setModifierItem]  = useState<MenuItem | null>(null);
+  const [modifiers,     setModifiers]     = useState<{ name: string; price: number; isAvailable: boolean }[]>([]);
+  const [modSaving,     setModSaving]     = useState(false);
+  const [newModName,    setNewModName]    = useState('');
+  const [newModPrice,   setNewModPrice]   = useState('');
+
+  const openModifiers = (item: MenuItem) => {
+    setModifierItem(item);
+    setModifiers((item as any).modifiers?.map((m: any) => ({ name: m.name, price: m.price, isAvailable: m.isAvailable !== false })) || []);
+    setNewModName(''); setNewModPrice('');
+  };
+
+  const addModifier = () => {
+    if (!newModName.trim()) return;
+    const p = Number(newModPrice);
+    if (!Number.isFinite(p) || p < 0) { toast.error('Price must be ≥ 0'); return; }
+    setModifiers(prev => [...prev, { name: newModName.trim(), price: p, isAvailable: true }]);
+    setNewModName(''); setNewModPrice('');
+  };
+
+  const saveModifiers = async () => {
+    if (!modifierItem) return;
+    setModSaving(true);
+    try {
+      const res = await API.patch(`/menu/${modifierItem._id}/modifiers`, { modifiers });
+      toast.success('Modifiers saved.');
+      setMenuItems(prev => prev.map(m => m._id === modifierItem._id ? { ...m, ...(res.data.data || {}) } : m));
+      setModifierItem(null);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to save modifiers.');
+    } finally { setModSaving(false); }
+  };
   const openEditModal = (item: MenuItem) => {
     setEditingItem(item);
     // categoryId may be a populated object { _id, name } — extract the raw ID
@@ -433,7 +467,7 @@ export function MenuPage() {
                       <button onClick={() => handleToggleAvailability(item)} className={`p-2 rounded-lg transition-colors ${item.isAvailable ? 'text-success-600 hover:bg-success-50 dark:hover:bg-success-900/20' : 'text-secondary-400 hover:bg-secondary-100 dark:hover:bg-secondary-700'}`} title={item.isAvailable ? 'Mark unavailable' : 'Mark available'}><div className={`w-5 h-5 rounded-full border-2 ${item.isAvailable ? 'border-success-500 bg-success-500' : 'border-secondary-300'}`} /></button>
                       <button onClick={() => handleToggleRecommendation(item)} className={`p-2 rounded-lg transition-colors ${item.isRecommended ? 'text-warning-600 hover:bg-warning-50 dark:hover:bg-warning-900/20' : 'text-secondary-400 hover:bg-secondary-100 dark:hover:bg-secondary-700'}`} title={item.isRecommended ? 'Remove from recommended' : 'Add to recommended'}><Star className={`w-4 h-4 ${item.isRecommended ? 'fill-warning-500' : ''}`} /></button>
                     </div>
-                    <div className="flex gap-1"><button onClick={() => openRecipeModal(item)} className="p-2 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 text-primary-500" title="Manage recipe / ingredients"><ClipboardList className="w-4 h-4" /></button><button onClick={() => openEditModal(item)} className="p-2 rounded-lg hover:bg-secondary-100 dark:hover:bg-secondary-700 text-secondary-500"><Edit2 className="w-4 h-4" /></button><button onClick={() => handleDelete(item._id)} className="p-2 rounded-lg hover:bg-danger-50 dark:hover:bg-danger-900/20 text-danger-500"><Trash2 className="w-4 h-4" /></button></div>
+                    <div className="flex gap-1"><button onClick={() => openRecipeModal(item)} className="p-2 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 text-primary-500" title="Manage recipe / ingredients"><ClipboardList className="w-4 h-4" /></button><button onClick={() => openModifiers(item)} className="p-2 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 text-purple-500" title="Manage add-ons / modifiers"><PlusSquare className="w-4 h-4" /></button><button onClick={() => openEditModal(item)} className="p-2 rounded-lg hover:bg-secondary-100 dark:hover:bg-secondary-700 text-secondary-500"><Edit2 className="w-4 h-4" /></button><button onClick={() => handleDelete(item._id)} className="p-2 rounded-lg hover:bg-danger-50 dark:hover:bg-danger-900/20 text-danger-500"><Trash2 className="w-4 h-4" /></button></div>
                   </div>
                 </div>
               </motion.div>
@@ -558,6 +592,73 @@ export function MenuPage() {
                   </div>
                 </div>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Modifiers (Add-ons) Modal ─────────────────────────────── */}
+      <AnimatePresence>
+        {modifierItem && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+            onClick={() => setModifierItem(null)}>
+            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-md bg-white dark:bg-secondary-800 rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-secondary-900 dark:text-white">Add-ons · {modifierItem.name}</h2>
+                  <p className="text-xs text-secondary-400 mt-0.5">e.g. Extra cheese +₹20, No onion ₹0</p>
+                </div>
+                <button onClick={() => setModifierItem(null)} className="p-2 rounded-lg hover:bg-secondary-100 dark:hover:bg-secondary-700">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Existing modifiers */}
+              {modifiers.length === 0 ? (
+                <p className="text-sm text-secondary-400 py-4 text-center">No add-ons yet. Add one below.</p>
+              ) : (
+                <div className="space-y-2 mb-4">
+                  {modifiers.map((m, i) => (
+                    <div key={i} className="flex items-center gap-2 p-2.5 rounded-xl bg-secondary-50 dark:bg-secondary-700/50">
+                      <input value={m.name} onChange={e => setModifiers(prev => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                        className="flex-1 bg-transparent text-sm text-secondary-900 dark:text-white outline-none" />
+                      <span className="text-secondary-400 text-xs">₹</span>
+                      <input type="number" min={0} value={m.price}
+                        onChange={e => setModifiers(prev => prev.map((x, j) => j === i ? { ...x, price: Number(e.target.value) } : x))}
+                        className="w-20 bg-transparent text-sm text-secondary-900 dark:text-white outline-none text-right" />
+                      <button type="button" onClick={() => setModifiers(prev => prev.filter((_, j) => j !== i))}
+                        className="p-1 rounded hover:bg-danger-100 dark:hover:bg-danger-900/30 text-danger-500">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add new modifier */}
+              <div className="flex gap-2 mb-5">
+                <input value={newModName} onChange={e => setNewModName(e.target.value)}
+                  placeholder="Add-on name" className="input flex-1 py-2 text-sm"
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addModifier(); }}} />
+                <div className="relative w-24">
+                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-secondary-400 text-sm">₹</span>
+                  <input type="number" min={0} value={newModPrice} onChange={e => setNewModPrice(e.target.value)}
+                    placeholder="0" className="input w-full pl-6 py-2 text-sm" />
+                </div>
+                <button type="button" onClick={addModifier} className="btn btn-secondary py-2 px-3">
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setModifierItem(null)} className="btn btn-secondary flex-1">Cancel</button>
+                <button onClick={saveModifiers} disabled={modSaving} className="btn btn-primary flex-1 disabled:opacity-60">
+                  {modSaving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving…</> : 'Save Add-ons'}
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

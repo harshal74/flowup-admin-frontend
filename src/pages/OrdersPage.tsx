@@ -134,6 +134,43 @@ export function OrdersPage() {
     }
   };
 
+  // ── Update prep time on an active order ──────────────────────────
+  const handleEstimatedTimeUpdate = async (orderId: string, minutes: number | null) => {
+    try {
+      setStatusUpdating(orderId);
+      const res = await API.patch(`/orders/${orderId}/estimated-time`, { estimatedTime: minutes });
+      const updated = res.data?.data;
+      toast.success(minutes ? `Prep time set to ${minutes} min` : 'Prep time cleared');
+      setOrders(prev => prev.map(o =>
+        o._id === orderId ? { ...o, estimatedTime: updated?.estimatedTime ?? minutes ?? undefined } : o
+      ));
+      if (selectedOrder?._id === orderId) {
+        setSelectedOrder({ ...selectedOrder, estimatedTime: updated?.estimatedTime ?? minutes ?? undefined } as Order);
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to update prep time');
+    } finally {
+      setStatusUpdating(null);
+    }
+  };
+
+  // ── Dispatch a READY delivery order ─────────────────────────────
+  const handleDispatch = async (orderId: string) => {
+    try {
+      setStatusUpdating(orderId);
+      await API.patch(`/orders/${orderId}/dispatch`);
+      toast.success('Order dispatched for delivery');
+      setOrders(prev => prev.map(o => o._id === orderId ? { ...o, status: 'OUT_FOR_DELIVERY' } : o));
+      if (selectedOrder?._id === orderId) {
+        setSelectedOrder({ ...selectedOrder, status: 'OUT_FOR_DELIVERY' });
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to dispatch');
+    } finally {
+      setStatusUpdating(null);
+    }
+  };
+
   const getTimeAgo = (date: string) => {
     const min = Math.floor((Date.now() - new Date(date).getTime()) / 60000);
     if (min < 1)  return 'Just now';
@@ -561,7 +598,60 @@ export function OrdersPage() {
               {/* Drawer body — scrollable */}
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
 
-                {/* Status update */}
+                {/* Est. Time — editable while order is active */}
+                {selectedOrder.status !== 'REJECTED' && selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'COMPLETED' && (
+                  <div className="card p-4">
+                    <h3 className="font-semibold text-secondary-900 dark:text-white mb-3 text-sm flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-secondary-400" />
+                      Preparation Time
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap gap-1.5 flex-1">
+                        {[10, 15, 20, 30, 45, 60].map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => handleEstimatedTimeUpdate(selectedOrder._id, m)}
+                            disabled={statusUpdating === selectedOrder._id}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
+                              selectedOrder.estimatedTime === m
+                                ? 'bg-primary-600 text-white border-primary-600'
+                                : 'bg-white dark:bg-secondary-800 text-secondary-700 dark:text-secondary-300 border-secondary-200 dark:border-secondary-600 hover:border-primary-400'
+                            }`}
+                          >
+                            {m} min
+                          </button>
+                        ))}
+                      </div>
+                      {selectedOrder.estimatedTime && (
+                        <button
+                          onClick={() => handleEstimatedTimeUpdate(selectedOrder._id, null)}
+                          className="text-xs text-secondary-400 hover:text-secondary-600 ml-1"
+                          title="Clear"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    {selectedOrder.estimatedTime && (
+                      <p className="text-xs text-secondary-500 mt-2">Current: {selectedOrder.estimatedTime} min</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Dispatch button — READY delivery orders only */}
+                {selectedOrder.orderType === 'DELIVERY' && selectedOrder.status === 'READY' && (
+                  <button
+                    onClick={() => handleDispatch(selectedOrder._id)}
+                    disabled={statusUpdating === selectedOrder._id}
+                    className="w-full btn btn-primary flex items-center justify-center gap-2 py-3 disabled:opacity-50"
+                  >
+                    <Truck className="w-5 h-5" />
+                    {statusUpdating === selectedOrder._id ? 'Dispatching…' : 'Dispatch — Out for Delivery'}
+                  </button>
+                )}
+
+                {/* Status update dropdown */}
                 <div>
                   <label className="label">Update Status</label>
                   <select

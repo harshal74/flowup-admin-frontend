@@ -71,6 +71,7 @@ interface TableInfo {
   status: TableStatus;
   reservations: TableReservation[];   // all active/arrived reservations for this table
   clean?: TableClean;
+  seatedAt?: string | null;           // when the first accepted dine-in order arrived (table occupancy clock)
 }
 
 interface WaiterReq { _id: string; tableNumber: number; status: string; requestType?: 'WAITER' | 'BILL'; }
@@ -218,14 +219,50 @@ function buildTableList(
     if (tableMap.get(tableNum) === 'Available') tableMap.set(tableNum, 'Reserved');
   });
 
+  // Occupied-since: earliest seatedAt among active dine-in orders at each table.
+  const seatedMap = new Map<number, string>();
+  orders.forEach(o => {
+    if (!o.tableNumber || o.orderType !== 'DINE_IN' || !o.seatedAt) return;
+    if (o.paymentStatus === 'PAID') return;
+    if (!ACTIVE_ORDER_STATUSES.includes(o.status) && o.status !== 'COMPLETED') return;
+    const cur = seatedMap.get(o.tableNumber);
+    if (!cur || new Date(o.seatedAt) < new Date(cur)) seatedMap.set(o.tableNumber, o.seatedAt);
+  });
+
   return Array.from(tableMap.entries())
     .map(([number, status]) => ({
       number,
       status,
       reservations: resMap.get(number) || [],
       clean: cleanMap.get(number),
+      seatedAt: seatedMap.get(number) || null,
     }))
     .sort((a, b) => a.number - b.number);
+}
+
+/** "1h 23m" style elapsed time since the given ISO date. */
+function occupiedSince(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+/** Ticking occupancy clock — re-renders every minute. */
+function OccupancyClock({ seatedAt, textClass }: { seatedAt: string; textClass: string }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
+  const label = occupiedSince(seatedAt);
+  if (!label) return null;
+  return (
+    <span className={`text-[9px] font-medium opacity-80 ${textClass}`}>⏱ {label}</span>
+  );
 }
 
 // ── Reserve / Edit Modal ───────────────────────────────────────────
@@ -707,6 +744,11 @@ export default function TablesPage() {
                 <Table2 className={`w-4 h-4 ${style.text} opacity-60`} />
                 <p className="text-xl font-black text-secondary-900 dark:text-white leading-none">{table.number}</p>
                 <p className={`text-[10px] font-semibold text-center ${style.text} leading-tight`}>{style.label}</p>
+
+                {/* Occupancy clock — shows how long the table has been occupied */}
+                {table.seatedAt && (table.status === 'Occupied' || table.status === 'Bill Requested' || table.status === 'Waiter Requested') && (
+                  <OccupancyClock seatedAt={table.seatedAt} textClass={style.text} />
+                )}
 
                 {(isAvailable || (table.status === 'Reserved' && table.reservations.some(r => r.status === 'ARRIVED'))) && (
                   <button onClick={() => navigate(`/tables/${table.number}/order`)}

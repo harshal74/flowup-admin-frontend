@@ -354,6 +354,24 @@ export function DashboardPage() {
       .slice(0, 10);
   }, [currentOrders]);
 
+  // ── Item / Category Revenue (server-computed from the item-sales endpoint) ──
+  const [itemSales, setItemSales] = useState<{ items: { name: string; quantity: number; revenue: number }[]; categories: { name: string; quantity: number; revenue: number }[] } | null>(null);
+  const [itemSalesLoading, setItemSalesLoading] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setItemSalesLoading(true);
+      try {
+        const res = await API.get(`/dashboard/item-sales?period=${period}&offset=${offset}`);
+        if (!cancelled) setItemSales(res.data?.data || null);
+      } catch { /* non-blocking */ }
+      finally { if (!cancelled) setItemSalesLoading(false); }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, offset]);
+  const categoryRevenue = useMemo(() => (itemSales?.categories || []).slice(0, 8), [itemSales]);
+
   // ── Recent Orders (always latest 10) ───────────────────────────
   const recentOrders = useMemo(
     () => [...allOrders].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 10),
@@ -665,6 +683,34 @@ export function DashboardPage() {
         </motion.div>
 
       </div>
+
+      {/* ── Revenue by Category ───────────────────────────────────── */}
+      {(categoryRevenue.length > 0 || itemSalesLoading) && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="card p-6">
+          <h3 className="text-lg font-semibold text-secondary-900 dark:text-white mb-1">Revenue by Category</h3>
+          <p className="text-xs text-secondary-400 mb-4">Based on {periodLabel} — COMPLETED + PAID orders</p>
+          {itemSalesLoading ? (
+            <div className="h-48 skeleton rounded-xl" />
+          ) : categoryRevenue.length === 0 ? (
+            <p className="text-secondary-400 text-sm text-center py-8">No revenue data for this period</p>
+          ) : (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categoryRevenue} margin={{ top: 0, right: 8, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <XAxis dataKey="name" stroke="#6B7280" fontSize={11} tick={{ fill: '#6B7280' }} />
+                  <YAxis stroke="#6B7280" fontSize={11} tick={{ fill: '#6B7280' }} tickFormatter={(v) => `₹${v}`} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '10px', color: '#f1f5f9' }}
+                    formatter={(v: any) => [`₹${Number(v).toFixed(2)}`, 'Revenue']}
+                  />
+                  <Bar dataKey="revenue" fill="#6366F1" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </motion.div>
+      )}
     </div>
   );
 }

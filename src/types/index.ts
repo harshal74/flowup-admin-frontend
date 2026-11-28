@@ -193,6 +193,8 @@ export interface Order {
 
   acceptedAt?: string;
 
+  seatedAt?: string;    // when the first dine-in order at a table was accepted
+
   completedAt?: string;
 
   rejectedAt?: string;
